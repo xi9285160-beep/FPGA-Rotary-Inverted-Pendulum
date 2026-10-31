@@ -18,19 +18,22 @@
 
 推荐先用 `LQR/` 验证机构与接线（时序干净、参数少），再用 `PIDSYB/` 做完整功能演示。
 
-```mermaid
-flowchart LR
-    ADC["3PA1030 ADC 10-bit"] --> ADCV["adc.v 过采样"]
-    ENC["增量编码器 A/B"] --> ENCV["encoder.v 四倍频"]
-    ADCV --> CTRL["控制核心"]
-    ENCV --> CTRL
-    KEY["按键 拨码"] --> CTRL
-    CTRL --> MDRV["motor_drive.v TB6612"]
-    MDRV --> MOTOR["摆臂电机"]
-    CTRL --> USTAT["uart_status.v 遥测"]
-    USTAT --> PC["上位机 HTML 页"]
-    PC --> UCMD["uart_cmd 参数下发"]
-    UCMD --> CTRL
+```
+                     ┌──────────────────────────────────────────────┐
+                     │              控制核心 (50 MHz)                │
+  3PA1030 ADC        │                                              │
+  10-bit 并行 ──► adc.v ──12bit angle──┐                            │
+                                       │                            │
+  增量编码器  ──► encoder.v ──16bit enc┤                            │
+  A/B 正交                             ├──► PIDSYB: pendulum_ctrl   │
+                                       │    LQR:    lqr_ctrl        │
+  按键 / 拨码  ─────────────────────────┘                            │
+                                       │                            │
+                                       ├──► motor_drive.v ──► TB6612 ──► 摆臂电机
+                                       │                            │
+                                       └──► uart_status.v ──► 上位机 HTML
+                                                 ▲                  │
+                                                 └── uart_cmd ◄──────┘（参数下发）
 ```
 
 ---
