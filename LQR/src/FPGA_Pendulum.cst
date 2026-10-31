@@ -1,0 +1,103 @@
+// ============================================================================
+// FPGA_Pendulum.cst  —  物理约束（J280 姿态控制套件，GW2A-LV55PG484C8/I7）
+// 引脚来自《J280 姿态控制系统开发套件用户手册》与 Interface_test 工程
+// ============================================================================
+
+// ---------------- 时钟 / 复位 ----------------
+IO_LOC  "clk_50m" M19;
+IO_PORT "clk_50m" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "rst_n" AB3;
+IO_PORT "rst_n" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+
+// ---------------- 按键 SW1~SW4（BANK_3，1.5V） ----------------
+IO_LOC  "key_sw[0]" T18;   // SW1 启动/停止
+IO_PORT "key_sw[0]" IO_TYPE=LVCMOS15 PULL_MODE=UP BANK_VCCIO=1.5;
+IO_LOC  "key_sw[1]" R18;   // SW2 手动/自动
+IO_PORT "key_sw[1]" IO_TYPE=LVCMOS15 PULL_MODE=UP BANK_VCCIO=1.5;
+IO_LOC  "key_sw[2]" U20;   // SW3 目标位置 +
+IO_PORT "key_sw[2]" IO_TYPE=LVCMOS15 PULL_MODE=UP BANK_VCCIO=1.5;
+IO_LOC  "key_sw[3]" T20;   // SW4 目标位置 -
+IO_PORT "key_sw[3]" IO_TYPE=LVCMOS15 PULL_MODE=UP BANK_VCCIO=1.5;
+
+// ---------------- 拨码开关 B3_SW1 / B3_SW2（BANK_3，1.5V） ----------------
+IO_LOC  "cal_sw" W20;      // B3_SW1：校准
+IO_PORT "cal_sw" IO_TYPE=LVCMOS15 PULL_MODE=UP BANK_VCCIO=1.5;
+IO_LOC  "dir_sw" V20;      // B3_SW2：编码器方向取反
+IO_PORT "dir_sw" IO_TYPE=LVCMOS15 PULL_MODE=UP BANK_VCCIO=1.5;
+
+// ---------------- 串口（BANK_2，3.3V） ----------------
+IO_LOC  "uart_tx" K20;
+IO_PORT "uart_tx" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "uart_rx" L20;
+IO_PORT "uart_rx" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+
+// ---------------- 3PA1030 ADC ----------------
+IO_LOC  "adc_oe_n" H20;
+IO_PORT "adc_oe_n" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "adc_clk" G18;
+IO_PORT "adc_clk" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
+// STBY 引脚沿用 Interface_test 工程的自动分配位置
+IO_LOC  "adc_stby_n" T6;
+IO_PORT "adc_stby_n" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=8 BANK_VCCIO=1.8;
+
+IO_LOC  "adc_data_in[9]" E19;
+IO_PORT "adc_data_in[9]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "adc_data_in[8]" G17;
+IO_PORT "adc_data_in[8]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "adc_data_in[7]" G19;
+IO_PORT "adc_data_in[7]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "adc_data_in[6]" H19;
+IO_PORT "adc_data_in[6]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "adc_data_in[5]" H18;
+IO_PORT "adc_data_in[5]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "adc_data_in[4]" D19;
+IO_PORT "adc_data_in[4]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "adc_data_in[3]" J19;
+IO_PORT "adc_data_in[3]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "adc_data_in[2]" J20;
+IO_PORT "adc_data_in[2]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "adc_data_in[1]" M21;
+IO_PORT "adc_data_in[1]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "adc_data_in[0]" L21;
+IO_PORT "adc_data_in[0]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+
+// ---------------- 编码器 1（BANK_4，3.3V，XH1 接口） ----------------
+IO_LOC  "enc1_a" Y20;
+IO_PORT "enc1_a" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "enc1_b" AA20;
+IO_PORT "enc1_b" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+
+// ---------------- TB6612 A 通道（BANK_4，3.3V，XH1 接口） ----------------
+IO_LOC  "pwma" Y18;
+IO_PORT "pwma" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=4 BANK_VCCIO=3.3;
+IO_LOC  "ain1" Y17;
+IO_PORT "ain1" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "ain2" Y19;
+IO_PORT "ain2" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
+
+// ---------------- 编码器 2（BANK_4，3.3V，XH2 接口） ----------------
+IO_LOC  "enc2_a" W18;
+IO_PORT "enc2_a" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "enc2_b" W17;
+IO_PORT "enc2_b" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+
+// ---------------- TB6612 B 通道（BANK_4，3.3V，XH2 接口） ----------------
+// 回退：恢复为原来的绑脚（V15/AA17）。若以后改用 B 通道驱动，可能需要与手册
+// （BIN1=AA17、BIN2=V15）对调，可用 motor_drive 的 PWM_INV 代替验证。
+IO_LOC  "pwmb" V14;
+IO_PORT "pwmb" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=4 BANK_VCCIO=3.3;
+IO_LOC  "bin1" V15;
+IO_PORT "bin1" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "bin2" AA17;
+IO_PORT "bin2" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
+
+// ---------------- LED（BANK_3，1.5V） ----------------
+// 若实际 LED 不亮，可将 IO_TYPE/BANK_VCCIO 改为 LVCMOS33/3.3 再试
+IO_LOC  "led[0]" U18;      // LED1 运行
+IO_PORT "led[0]" IO_TYPE=LVCMOS15 PULL_MODE=UP BANK_VCCIO=1.5;
+IO_LOC  "led[1]" U19;      // LED2 手动
+IO_PORT "led[1]" IO_TYPE=LVCMOS15 PULL_MODE=UP BANK_VCCIO=1.5;
+IO_LOC  "led[2]" U17;      // LED3 自动
+IO_PORT "led[2]" IO_TYPE=LVCMOS15 PULL_MODE=UP BANK_VCCIO=1.5;
+IO_LOC  "led[3]" T17;      // LED4 错误
+IO_PORT "led[3]" IO_TYPE=LVCMOS15 PULL_MODE=UP BANK_VCCIO=1.5;

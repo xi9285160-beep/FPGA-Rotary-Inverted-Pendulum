@@ -1,0 +1,2112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>倒立摆 · 综合控制台</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --line:#2a3240; --txt:#e6edf3; --dim:#8b949e;
+    --cyan:#22d3ee; --orange:#f59e0b; --green:#22c55e; --red:#ef4444;
+    --blue:#1d4ed8; --purple:#a78bfa; --teal:#4db6ac;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+       font-family:"Microsoft YaHei UI","Segoe UI",sans-serif;font-size:14px}
+  header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+         padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line);
+         position:sticky;top:0;z-index:5}
+  header h1{font-size:16px;margin:0 12px 0 0;font-weight:600}
+  select,button,input[type=number]{background:#0d1117;color:var(--txt);
+         border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:13px}
+  button{cursor:pointer}
+  button:hover{border-color:#3b82f6}
+  button.primary{background:var(--blue);border-color:var(--blue)}
+  button.primary:hover{background:#2563eb}
+  button.on{background:var(--blue);border-color:#3b82f6;color:#fff}
+  button.danger{border-color:#7f1d1d;color:#fca5a5}
+  button.danger:hover{background:#7f1d1d;color:#fff}
+  button.sm{padding:3px 8px;font-size:12px}
+  #state{font-weight:600}
+  .ok{color:var(--green)} .bad{color:var(--red)} .warn{color:var(--orange)}
+  main{padding:12px;display:flex;flex-direction:column;gap:12px}
+  .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+       background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+  .bar label{color:var(--dim);font-size:12px;margin-right:2px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;align-items:start}
+  @media (max-width:1500px){.grid4{grid-template-columns:1fr 1fr}}
+  @media (max-width:1180px){.grid3{grid-template-columns:1fr 1fr}}
+  @media (max-width:980px){
+    .grid2,.grid3,.grid4{grid-template-columns:1fr}
+    .grid4 > .card{grid-area:auto !important}
+  }
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+  .sectlbl{font-size:12px;color:#6e7681;letter-spacing:.5px;margin:-2px 0 8px;
+           padding-bottom:4px;border-bottom:1px dashed var(--line)}
+  .cardhead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:8px}
+  .cardhead .name{font-weight:600}
+  .cardhead .sub{color:var(--dim);font-size:12px;text-align:right}
+  .btnrow{display:flex;flex-wrap:wrap;gap:8px}
+  .kvrow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+  .kv{background:#0d1117;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+  .kv .t{color:var(--dim);font-size:12px}
+  .kv .v{font-family:Consolas,monospace;font-size:22px;font-weight:700;margin-top:2px}
+  .kv.a .v{color:var(--cyan)} .kv.b .v{color:var(--orange)} .kv.c .v{color:var(--purple)}
+  canvas{width:100%;display:block;background:#0b0e13;border:1px solid var(--line);border-radius:8px}
+  #cvEnc{height:170px}                       /* 位置曲线（主展示） */
+  #cvAng,#cvPwm{height:120px}
+  #cvModel{height:170px}
+  #cvMic{height:110px}
+  .slider{margin:10px 0 4px}
+  .slider .lab{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px}
+  .slider .lab b{font-family:Consolas,monospace;color:var(--cyan)}
+  input[type=range]{width:100%;accent-color:var(--blue)}
+  #log{height:110px;overflow:auto;background:#0b0e13;border:1px solid var(--line);
+       border-radius:8px;padding:8px;font-family:Consolas,monospace;font-size:12px;
+       color:var(--dim);white-space:pre-wrap}
+  #log .e{color:var(--red)} #log .k{color:var(--green)}
+  .tag{display:inline-block;padding:1px 6px;border-radius:4px;background:#1f2937;font-size:11px}
+  .diprow{display:flex;align-items:center;gap:10px;margin-top:12px;
+          padding-top:10px;border-top:1px dashed var(--line)}
+  .diplab{color:var(--dim);font-size:12px}
+  .dipside{font-family:Consolas,monospace;font-size:13px;color:#4b5563;transition:.2s}
+  .dipside.on{color:#e6edf3;font-weight:700}
+  .sw{width:58px;height:30px;border-radius:15px;background:#1f2937;border:1px solid var(--line);
+      position:relative;cursor:pointer;transition:.2s;flex:none}
+  .sw .knob{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;
+            background:#64748b;transition:.2s}
+  .sw.on{background:var(--blue);border-color:#3b82f6}
+  .sw.on .knob{left:31px;background:#fff}
+  .field{margin-top:10px}
+  .field .line{display:flex;gap:6px;align-items:center}
+  .hint{color:#6e7681;font-size:11px;margin-top:3px}
+  #paramList input[type=number]{width:64px;font-size:12px;padding:2px 4px;text-align:right;
+    font-family:Consolas,monospace}
+  #paramList .prow{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+  #paramList .pname{flex:1;font-size:12px;font-family:Consolas,monospace;color:#c9d1d9;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #paramList .paddr{font-size:10px;color:#5a6672;font-family:Consolas,monospace}
+  #paramList h4{margin:12px 0 5px;font-size:12px;font-weight:600;padding-bottom:2px}
+  .badge{display:inline-block;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;
+         background:#21262d;color:var(--dim)}
+  .badge.bal{background:rgba(34,197,94,.15);color:var(--green)}
+  .badge.sw{background:rgba(245,158,11,.15);color:var(--orange)}
+
+  /* 底部：协议切换（故意做得很低调） */
+  .protofoot{display:flex;justify-content:center;align-items:center;gap:8px;
+             padding:4px 0 18px;opacity:.45;font-size:11px;color:var(--dim);
+             user-select:none}
+  .protofoot .sw{transform:scale(.62);transform-origin:center;margin:0 -6px}
+  .protofoot .sw.on{background:#3a4351;border-color:#4b5563}
+  .protofoot .sw .knob{background:#4b5563}
+  .protofoot .sw.on .knob{background:#c9d1d9}
+  .protofoot .ps{font-family:Consolas,monospace;letter-spacing:.5px}
+  .protofoot .ps.on{color:#9ca3af}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>倒立摆 · 综合控制台</h1>
+  <button id="btnConn" class="primary">连接串口</button>
+  <span id="state" class="bad">未连接</span>
+  <span class="tag" id="rateTag">0.0 Hz</span>
+  <span class="tag" id="cntTag">帧 0 / 错 0</span>
+  <span class="tag" id="rxTag" title="从串口收到的原始字节数：一直是 0 说明根本没有数据进来（接线/端口被别的标签页占用）">字节 0</span>
+  <span id="stTag" class="badge">–</span>
+  <span id="modeTag" class="badge">–</span>
+  <button id="btnFull">全屏</button>
+</header>
+
+<main>
+  <!-- ==================== 设置 ==================== -->
+  <div class="bar">
+    <label>角度零点</label>
+    <input type="number" id="angleZero" value="768" step="1" style="width:88px">
+    <label>角位移全量程</label>
+    <input type="number" id="adcSpan" value="4160" step="10" style="width:88px" title="STM32：360° 对应 ADC counts（2080 = 180°）">
+    <label>编码器每圈</label>
+    <input type="number" id="cpr" value="1040" step="1" style="width:80px">
+    <label>编码器零点</label>
+    <input type="number" id="encZero" value="10000" step="1" style="width:88px">
+    <label>时间窗</label>
+    <select id="span">
+      <option value="5">5 s</option>
+      <option value="10" selected>10 s</option>
+      <option value="20">20 s</option>
+      <option value="30">30 s</option>
+      <option value="60">60 s</option>
+    </select>
+    <label>编码器波形</label>
+    <select id="encUnit">
+      <option value="deg" selected>角度 °</option>
+      <option value="cnt">counts</option>
+    </select>
+    <label title="显示方向校准：勾选后该通道反向显示"><input type="checkbox" id="chkInvArm"> 摆臂反向</label>
+    <label><input type="checkbox" id="chkInvPend"> 摆杆反向</label>
+  </div>
+
+  <!-- ==================== 主网格（4 列 × 2 行，卡片用 grid-area 定位） ==================== -->
+  <div class="grid4">
+    <div class="card" style="grid-area:1/1/2/2">
+      <div class="cardhead">
+        <span class="name">运行控制</span>
+        <span class="sub">起摆 / 复位 / 状态</span>
+      </div>
+      <div class="btnrow">
+        <button id="btnStart" class="primary">起摆 / 停止</button>
+        <button id="btnReset" class="danger">复位</button>
+        <button id="btnGetCal">读取固件零点</button>
+      </div>
+      <div class="btnrow" style="margin-top:8px">
+        <button id="btnPause">暂停</button>
+        <button id="btnClear">清空</button>
+        <button id="btnCsv">导出 CSV</button>
+        <button id="btnDemo">演示数据</button>
+        <button id="btnRaw" title="把最近收到的 256 字节以 十六进制 + ASCII 打印到日志，用来判断“有没有数据/波特率对不对”">原始数据</button>
+      </div>
+      <div class="diprow">
+        <span id="ctrlPid" class="dipside on">PID</span>
+        <div id="ctrlSw" class="sw"><div class="knob"></div></div>
+        <span id="ctrlLqr" class="dipside">LQR</span>
+      </div>
+      <div class="kvrow" style="margin-top:12px;margin-bottom:0">
+        <div class="kv a"><div class="t">状态</div><div class="v" id="stVal" style="font-size:20px">–</div></div>
+        <div class="kv b"><div class="t">运动模式</div><div class="v" id="modeVal" style="font-size:20px">–</div></div>
+      </div>
+    </div>
+
+    <!-- 位置曲线 + 速度曲线（同一张卡，滑条各自独立） -->
+    <div class="card" style="grid-area:1/2/3/4">
+      <div class="cardhead">
+        <span class="name">位置 / 速度曲线</span>
+        <span class="sub"><span id="kPos">--</span> · 目标/误差 <span id="kPosTgt">--</span></span>
+      </div>
+
+      <div class="sectlbl">位置曲线</div>
+      <div class="btnrow" style="margin-bottom:4px">
+        <button id="btnSine">正弦</button>
+        <button id="btnTri">三角</button>
+        <button id="btnRamp">斜坡</button>
+        <button id="btnMode0">退出模式</button>
+      </div>
+      <div class="slider" style="margin-top:6px">
+        <div class="lab"><span>位置幅度</span><b id="ampLab">100 counts</b></div>
+        <input type="range" id="pAmp" min="10" max="520" step="1" value="100">
+      </div>
+      <div class="slider" style="margin-bottom:6px">
+        <div class="lab"><span>位置周期</span><b id="perLab">2.0 s</b></div>
+        <input type="range" id="pSpd" min="0.5" max="20" step="0.5" value="2">
+      </div>
+      <canvas id="cvEnc"></canvas>
+
+      <div class="sectlbl" style="margin-top:12px">速度曲线</div>
+      <div class="btnrow" style="margin-bottom:4px">
+        <button id="btnVSine">速度正弦</button>
+        <button id="btnVTri">速度三角</button>
+      </div>
+      <div class="slider" style="margin-top:6px">
+        <div class="lab"><span>速度幅值</span><b id="vAmpLab">3 counts/拍</b></div>
+        <input type="range" id="vAmp" min="1" max="6" step="1" value="3">
+      </div>
+      <div class="slider">
+        <div class="lab"><span>速度周期</span><b id="vSpdLab">2.0 s</b></div>
+        <input type="range" id="vSpd" min="0.5" max="20" step="0.5" value="2">
+      </div>
+    </div>
+
+    <div class="card" style="grid-area:1/4/2/5">
+      <div class="cardhead">
+        <span class="name">实时姿态</span>
+      </div>
+      <canvas id="cvModel"></canvas>
+    </div>
+
+    <div class="card" style="grid-area:2/1/3/2">
+      <div class="cardhead">
+        <span class="name">手轮 / 位置点动</span>
+      </div>
+      <div class="diprow" style="margin-top:0;border-top:none;padding-top:0">
+        <span class="diplab">手轮跟随</span>
+        <div id="wheelSw" class="sw"><div class="knob"></div></div>
+        <span class="tag" id="wheelTag">关闭</span>
+      </div>
+      <div class="field">
+        <div class="line">
+          <input id="posTgt" type="number" value="0" step="10" style="flex:1;min-width:0">
+          <button class="sm" id="btnSetPos">下发目标</button>
+        </div>
+        <div class="hint" id="posTgtHint">= 0.0°（误差 –）</div>
+      </div>
+      <div class="slider" title="上方一次大阶跃会把摆杆甩倒：STM32 固件只有 415°/s 的限速，FPGA 有 POS_SLEW_MAX 兜底。这里由上位机自己做斜坡+加速度限制">
+        <div class="lab"><span>点动限速</span><b id="jogLab">50 °/s</b></div>
+        <input type="range" id="jogRate" min="10" max="300" step="5" value="50">
+      </div>
+      <div class="btnrow">
+        <button id="btnDec30">−30°</button>
+        <button id="btnInc30">+30°</button>
+        <button id="btnZero">回零</button>
+        <button id="btnNow">当前</button>
+      </div>
+    </div>
+
+    <div class="card" style="grid-area:2/4/3/5">
+      <div class="cardhead">
+        <span class="name">音乐节律运动</span>
+      </div>
+      <button id="btnMusic" class="primary" style="width:100%;padding:12px 6px;font-size:14px;margin-bottom:10px">音乐节律运动</button>
+      <div class="slider" style="margin-top:0">
+        <div class="lab"><span>节律幅度</span><b id="mAmpLab">40 counts</b></div>
+        <input type="range" id="mAmp" min="10" max="520" step="1" value="40">
+      </div>
+      <div class="slider">
+        <div class="lab"><span>节律周期</span><b id="mPerLab">4.0 s</b></div>
+        <input type="range" id="mPer" min="0.5" max="20" step="0.5" value="4">
+      </div>
+      <div class="hint" id="musicHint">按一下 → 5 s 后启动 4/4 拍；连按两下 → 5 s 后启动 3/4 拍</div>
+    </div>
+  </div>
+
+  <!-- ==================== 三路波形（一行三列） ==================== -->
+  <div class="grid3">
+    <div class="card">
+      <div class="cardhead"><span class="name">角位移传感器</span></div>
+      <div class="kvrow">
+        <div class="kv a"><div class="t">相对竖直</div><div class="v" id="kAng">--</div></div>
+        <div class="kv"><div class="t">原始 / 滤波</div><div class="v" id="kAngleRaw" style="font-size:16px">--</div></div>
+      </div>
+      <canvas id="cvAng"></canvas>
+    </div>
+
+    <div class="card">
+      <div class="cardhead"><span class="name">PWM 输出</span><span class="sub" id="kPwmSub">--</span></div>
+      <div class="kvrow">
+        <div class="kv c"><div class="t">当前 PWM</div><div class="v" id="kPwm">--</div></div>
+      </div>
+      <canvas id="cvPwm"></canvas>
+    </div>
+
+    <div class="card">
+      <div class="cardhead">
+        <span class="name">音频波形（时域）</span>
+        <span class="sub"><span class="tag" id="micInfo">DFT –</span> <span class="tag" id="micPkTag">峰值 –</span></span>
+      </div>
+      <canvas id="cvMic"></canvas>
+      <div class="diprow" style="gap:6px;margin-top:8px;border-top:none;padding-top:0">
+        <span class="diplab">节拍</span>
+        <button id="btnBeat4" class="sm">4/4 拍</button>
+        <button id="btnBeat3" class="sm">3/4 拍</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 全部参数 ==================== -->
+  <div class="card">
+    <div class="cardhead">
+      <span class="name">全部可调参数</span>
+    </div>
+    <div class="btnrow" style="margin-bottom:8px">
+      <button id="btnAllSend" class="primary">下发全部</button>
+      <button id="btnAllDefault">恢复面板默认值</button>
+    </div>
+    <div id="paramList"></div>
+  </div>
+
+  <!-- ==================== 日志 ==================== -->
+  <div class="card">
+    <div class="cardhead"><span class="name">日志</span><span class="sub">最多保留 200 行</span></div>
+    <div id="log"></div>
+  </div>
+
+  <!-- ==================== 协议切换（低调） ==================== -->
+  <footer class="protofoot" title="切换串口协议：STM32（14B 浮点帧 + 文本命令） / FPGA（102B 二进制帧 + 参数帧）">
+    <span>协议</span>
+    <span id="pL" class="ps">STM32</span>
+    <div id="protoSw" class="sw"><div class="knob"></div></div>
+    <span id="pR" class="ps on">FPGA</span>
+  </footer>
+</main>
+
+<script>
+"use strict";
+
+// ============================================================================
+// 两套协议（页面布局完全相同，只切换解析/下发方式）
+//
+// A) STM32（web/monitor.html 的固件）
+//    上报：'$' + 3×float32(小端) + 0x0D  → 14 字节，无校验
+//          ch0 = ADC 原始值  ch1 = 编码器计数  ch2 = PWM
+//    文本：'#CAL a b c' / '#CFG a b' / '#VCFG a b' / '#BEAT m a t'
+//          '#VMODE n' / '#MODE n' / '#OK SWING' / '#OK RESET' / '#ERR BUSY'
+//    下发：ASCII + CRLF，如 "SWING"、"POS 10000"、"AMP 100"
+//    默认波特率 128000
+//
+// B) FPGA / PIDSYB
+//    上报：AA 55 | … 102 字节（含 39 点音频）| chk(2~98) | 0D 0A
+//    下发：AA 55 01 | addr | dataH | dataL | chk | 0D 0A（9 字节）
+//    默认波特率 115200
+//
+// 未在当前协议里定义的功能 = 空按键（sendText/sendParam 里有协议门禁，直接返回）
+// ============================================================================
+const STM_FRAME = 14;
+const STM_HEAD  = 0x24;
+
+const FRAME_LEN  = 102;
+const AUD_N      = 39;
+const AUD_FS     = 15625 / 8;    // 1953.125 Hz
+const ANG_PER_180 = 534;         // FPGA：1 计数 ≈ 0.337°
+const ENC_PER_REV_DEF = 1040;
+
+const A = {
+  BAL_TARGET:0x0E, POS_TARGET:0x0F, CMD:0x10,
+  FLING_STEP:0x11, FLING_KP:0x12, FLING_KD:0x13, FLING_BACK:0x14,
+  FLING_DECEL:0x15, FLING_WIN:0x16, FLING_PTICKS:0x17,
+  MIC_FREQ:0x18, MIC_TH:0x19, MIC_HOLD:0x1A,
+  AB_ALPHA:0x1B, AB_BETA:0x1C,
+  MOVE_AMP:0x1D, MOVE_PERIOD:0x1E, MOVE_MODE:0x1F, BEAT_AMP:0x20
+};
+const CMD = { START:1, STOP:2, RESET:3, ARM:4, DISARM:5 };
+
+const MODE_NAMES = ['纯稳摆', '正弦', '三角', '斜坡', '四四拍', '手轮'];
+const STATE_NAMES = ['IDLE', 'SWING', 'BALANCE'];
+
+const $ = id => document.getElementById(id);
+const num = (el, def) => { const v = parseFloat(el.value); return Number.isFinite(v) ? v : def; };
+const fmt = (v, d) => Number.isFinite(v) ? ((v >= 0 ? '+' : '') + v.toFixed(d)) : '--';
+const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
+
+// ---------------------------------------------------------------- 状态
+let PROTO = 'fpga';                       // 'fpga' | 'stm32'
+let port = null, reader = null, writer = null, keepReading = false;
+let rxBuf = new Uint8Array(0);
+let txtAcc = "";
+let frames = 0, errors = 0, chkFail = 0;
+let paused = false, hasData = false;
+let lastFrameAt = 0, rateEma = 0, lastFrameTime = 0;
+let demoTimer = null, demo = false;
+
+// STM32 侧状态（来自文本行）
+let runState = 0, trajMode = 0, velMode = 0, beatMode = 0, ctrlMode = 0;
+let stmTgtCnt = null;                     // 上位机最后一次下发的 POS
+let tiltSince = 0;                        // STM32：摆杆倾斜超限的起始时刻
+
+let latest = {
+  angle: 0, enc1: 0, enc2: 0, pwm: 0, state: 0, rawAngle: 0,
+  posTgt: 0, posPwm: 0, micLvl: 0, abV: 0,
+  wheelSel: 0, armed: 0, mode: 0,
+  hasRaw: false,
+  audio: new Int16Array(AUD_N)
+};
+
+const MAX_SAMPLES = 4000;
+const MAX_AUDIO   = 120000;
+let samples = [];      // {t, ang, pos, posCnt, pwm, mic}
+let audio   = [];      // 麦克风样点（FPGA）
+
+// ---------------------------------------------------------------- 日志
+const logEl = $('log');
+function log(msg, cls) {
+  const t = new Date().toLocaleTimeString('zh-CN', {hour12:false});
+  const d = document.createElement('div');
+  if (cls) d.className = cls;
+  d.textContent = `[${t}] ${msg}`;
+  logEl.appendChild(d);
+  while (logEl.childElementCount > 200) logEl.removeChild(logEl.firstChild);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+// ---------------------------------------------------------------- 显示方向
+//   【默认方向】本机两套机构实测都是「原始读数减小 = 顺时针为正」：
+//     · 摆臂：posDegOfEnc() 用（零点 − 计数），SIGN_ARM = +1
+//     · 摆杆：角度 = SIGN_PEND ×（ADC − 零点），本机 ADC 方向相反 → SIGN_PEND = −1
+//   （即摆杆默认就是“反向”，面板上的「摆杆反向」勾选框会呈现为勾中）
+const SIGN_KEY = 'pidsyb_sign_v2';   // 升版：强制一次新默认方向，之后仍可手动校准
+let signState = { arm: 1, pend: -1 };
+try {
+  const s = JSON.parse(localStorage.getItem(SIGN_KEY) || 'null');
+  if (s && (s.arm === 1 || s.arm === -1) && (s.pend === 1 || s.pend === -1)) signState = s;
+} catch (_) {}
+let SIGN_ARM = signState.arm, SIGN_PEND = signState.pend;
+function applySignState() {
+  SIGN_ARM = signState.arm; SIGN_PEND = signState.pend;
+  for (const k in rangeCache) delete rangeCache[k];
+  try { localStorage.setItem(SIGN_KEY, JSON.stringify(signState)); } catch (_) {}
+}
+
+// ---------------------------------------------------------------- 协议切换
+const PKEY = 'pend_proto_v1';
+const SETTINGS = {
+  fpga:  { angleZero: 768,  encZero: 10000, cpr: 1040, adcSpan: 4160, span: 10,
+           jogRate: 150, pAmp: 87, pSpd: 4, mAmp: 40, mPer: 4 },
+  stm32: { angleZero: 3204, encZero: 10000, cpr: 1040, adcSpan: 4160, span: 10,
+           jogRate: 50,  pAmp: 100, pSpd: 2, mAmp: 40, mPer: 4 }
+};
+const SET_KEYS = ['angleZero', 'adcSpan', 'cpr', 'encZero', 'span', 'jogRate',
+                  'pAmp', 'pSpd', 'mAmp', 'mPer'];
+
+function loadProtoSettings() {
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem('pend_set_' + PROTO) || 'null'); } catch (_) {}
+  const def = SETTINGS[PROTO];
+  SET_KEYS.forEach(k => {
+    if ($(k)) $(k).value = (s && s[k] !== undefined) ? s[k] : def[k];
+  });
+  syncLabels();
+}
+function saveProtoSettings() {
+  const o = {};
+  SET_KEYS.forEach(k => { if ($(k)) o[k] = $(k).value; });
+  try { localStorage.setItem('pend_set_' + PROTO, JSON.stringify(o)); } catch (_) {}
+}
+
+function setProto(p, silent) {
+  PROTO = (p === 'stm32') ? 'stm32' : 'fpga';
+  try { localStorage.setItem(PKEY, PROTO); } catch (_) {}
+
+  $('pL').classList.toggle('on', PROTO === 'stm32');
+  $('pR').classList.toggle('on', PROTO === 'fpga');
+  $('protoSw').classList.toggle('on', PROTO === 'fpga');
+
+  loadProtoSettings();
+  resetBuffers();
+
+  if (!silent) {
+    log('协议已切到 ' + (PROTO === 'fpga' ? 'FPGA（102 字节帧 / 参数帧，115200）' : 'STM32（14 字节浮点帧 / 文本命令，128000）'));
+    if (port) log('⚠ 串口已打开，请断开后重新连接（两套协议的波特率不同，不能热切）', 'e');
+  }
+}
+
+// ---------------------------------------------------------------- 串口
+//   连接流程（关键：每一步都要有可见反馈，不能"点了没反应"）
+//     1. 先把顶栏改成"正在选择…"并写日志 —— 选择框被浏览器拦掉时也能看出卡在哪
+//     2. 优先复用【已授权】的端口（navigator.serial.getPorts()），不弹框直接开
+//     3. 没有已授权端口才弹选择框；Shift + 点击 = 强制重新选择
+async function connect(forcePicker) {
+  if (!('serial' in navigator)) {
+    log('此浏览器不支持 Web Serial，请用 Chrome / Edge 并通过 http://localhost 打开', 'e');
+    $('state').textContent = '本浏览器不支持串口';
+    $('state').className = 'bad';
+    return;
+  }
+  const baudRate = PROTO === 'fpga' ? 115200 : 128000;
+  $('state').textContent = '正在选择串口…';
+  $('state').className = 'warn';
+  log(`正在打开串口（协议 ${PROTO === 'fpga' ? 'FPGA' : 'STM32'}，波特率 ${baudRate}）…`);
+
+  try {
+    let p = null;
+    if (!forcePicker) {
+      try {
+        const granted = await navigator.serial.getPorts();
+        if (granted && granted.length) {
+          p = granted[0];
+          log('复用已授权端口（想重新选择设备：按住 Shift 再点「连接串口」）');
+        }
+      } catch (_) {}
+    }
+    if (!p) {
+      log('请在浏览器弹出的选择框里选一个串口设备（看不到弹框请看下面的排查提示）');
+      // 选择框一直挂着时给个提示，避免误以为页面死了
+      const hint = setTimeout(() => {
+        if (!port) log('⚠ 已等待 20 s 仍没有选到端口：检查浏览器是否弹出窗口/被其他窗口挡住；或先断开其他占用该串口的页面', 'e');
+      }, 20000);
+      try {
+        p = await navigator.serial.requestPort();
+      } finally {
+        clearTimeout(hint);
+      }
+    }
+
+    port = p;
+    $('state').textContent = '正在打开…';
+    await port.open({ baudRate, dataBits: 8, stopBits: 1, parity: 'none', flowControl: 'none' });
+    try { await port.setSignals({ dataTerminalReady: true, requestToSend: false }); } catch (_) {}
+
+    writer = port.writable.getWriter();
+    keepReading = true;
+    resetBuffers();
+    $('state').textContent = '已连接 ' + baudRate;
+    $('state').className = 'ok';
+    $('btnConn').textContent = '断开';
+    log('已连接 ' + baudRate + ' 8N1（' + (PROTO === 'fpga' ? 'FPGA' : 'STM32') + ' 协议）');
+    readLoop();
+    if (PROTO === 'stm32') {
+      setTimeout(() => { sendText('GETCAL'); sendText('GETCFG'); sendText('GETVCFG'); sendText('GETBEAT'); }, 400);
+      // 固件命令自检：老固件没有这些命令，只会回空 #ERR —— 早点告诉用户，别猜
+      setTimeout(() => {
+        const miss = [];
+        if (!fwProbe.cal)  miss.push('GETCAL');
+        if (!fwProbe.cfg)  miss.push('GETCFG');
+        if (!fwProbe.vcfg) miss.push('GETVCFG');
+        if (!fwProbe.beat) miss.push('GETBEAT');
+        if (miss.length)
+          log('⚠ 固件没有回应 ' + miss.join(' / ') + ' —— 板子里烧的很可能是旧版固件（缺 POS/BEAT/回读命令），' +
+              '点动、曲线、节拍都可能"固件拒绝"。请重新编译下载 STM32_Pendulum 的最新 control.c', 'e');
+        else
+          log('固件命令自检通过（CAL / CFG / VCFG / BEAT 都有回读）', 'k');
+      }, 2200);
+    }
+  } catch (e) {
+    port = null;
+    $('state').textContent = '未连接';
+    $('state').className = 'bad';
+    $('btnConn').textContent = '连接串口';
+    const name = e && e.name ? e.name : '';
+    const msg  = e && e.message ? e.message : String(e);
+    if (name === 'NotFoundError') {
+      log('已取消选择端口（没有选设备，或选择框被关掉了）');
+    } else if (name === 'InvalidStateError' || /already open|in use|busy/i.test(msg)) {
+      log('打不开串口：该端口已被其他页面/上位机占用 —— 把别的标签页（pos_console、monitor.html、PendulumHost.py 等）断开后重试', 'e');
+    } else if (name === 'SecurityError') {
+      log('浏览器拒绝了串口访问：请通过 http://localhost 打开本页，并允许串口权限', 'e');
+    } else if (name === 'NetworkError' || /Failed to open/i.test(msg)) {
+      log('打开串口失败：设备可能被占用或已拔出（' + msg + '）', 'e');
+    } else {
+      log('打开串口失败：' + msg, 'e');
+    }
+  }
+}
+
+async function disconnect() {
+  keepReading = false;
+  rampStop();
+  try { if (reader) await reader.cancel(); } catch (_) {}
+  try { if (writer) { writer.releaseLock(); writer = null; } } catch (_) {}
+  try { if (port) await port.close(); } catch (_) {}
+  reader = null; port = null;
+  $('state').textContent = '未连接';
+  $('state').className = 'bad';
+  $('btnConn').textContent = '连接串口';
+  log('已断开');
+}
+
+async function readLoop() {
+  while (port && port.readable && keepReading) {
+    let r;
+    try {
+      r = port.readable.getReader();
+      reader = r;
+      while (keepReading) {
+        const { value, done } = await r.read();
+        if (done) break;
+        if (value && value.length) feed(value);
+      }
+    } catch (e) {
+      if (keepReading) log('读取中断：' + (e && e.message ? e.message : e), 'e');
+      break;
+    } finally {
+      try { r && r.releaseLock(); } catch (_) {}
+      reader = null;
+    }
+  }
+  if (port) await disconnect();
+}
+
+// ---- 下发（带协议门禁：不是当前协议的写法就当作空按键）----
+function sendText(s, quiet) {
+  if (PROTO !== 'stm32') return false;          // FPGA 模式：空按键
+  if (!port || !writer) { log('未连接串口', 'e'); return false; }
+  try {
+    writer.write(new TextEncoder().encode(s + "\r\n"));
+    if (!quiet) log('→ ' + s);
+    return true;
+  } catch (e) {
+    log('→ ' + s + ' 发送失败', 'e');
+    return false;
+  }
+}
+
+function sendParam(addr, value) {
+  if (PROTO !== 'fpga') return false;           // STM32 模式：空按键
+  if (!port || !writer) { log('未连接串口', 'e'); return false; }
+  const v = ((Math.round(value) % 65536) + 65536) % 65536;
+  const dh = (v >> 8) & 0xFF, dl = v & 0xFF;
+  const chk = 0x01 ^ (addr & 0xFF) ^ dh ^ dl;
+  const buf = new Uint8Array([0xAA, 0x55, 0x01, addr & 0xFF, dh, dl, chk, 0x0D, 0x0A]);
+  writer.write(buf).catch(e => log('写入失败：' + e.message, 'e'));
+  return true;
+}
+function sendCmd(code) { return sendParam(A.CMD, code); }
+
+// ---------------------------------------------------------------- 缓冲
+function resetBuffers() {
+  rxBuf = new Uint8Array(0);
+  txtAcc = "";
+  rampStop();
+  samples = [];
+  audio = [];
+  frames = 0; errors = 0; chkFail = 0;
+  lastT = 0; lastFrameTime = 0; rateEma = 0; lastFrameAt = 0;
+  hasData = false; micPeak = 0;
+  stmTgtCnt = null; runState = 0; trajMode = 0; velMode = 0; beatMode = 0;
+  latest.posTgt = 0; latest.rawAngle = 0; latest.hasRaw = false;
+  rxBytes = 0; rawHist = []; lastByteAt = 0; noFrameWarned = false; noFrameAt = 0; textLines = 0;
+  lastErr = null; tiltSince = 0;
+  fwProbe.cal = fwProbe.cfg = fwProbe.vcfg = fwProbe.beat = false;
+  for (const k in rangeCache) delete rangeCache[k];
+  updateCnt();
+}
+
+// ---------------------------------------------------------------- 帧解析（按协议分派）
+function feed(bytes) {
+  addRawBytes(bytes);
+  const merged = new Uint8Array(rxBuf.length + bytes.length);
+  merged.set(rxBuf, 0);
+  merged.set(bytes, rxBuf.length);
+  rxBuf = merged;
+
+  if (PROTO === 'stm32') feedStm32();
+  else feedFpga();
+
+  if (rxBuf.length > 8192) rxBuf = rxBuf.slice(-256);
+  updateCnt();
+}
+
+// ---- STM32：'$' + 3×float32(LE) + 0x0D ----
+const dv = new DataView(new ArrayBuffer(4));
+
+function feedStm32() {
+  //   注意：不能"缓冲不足 14 字节就整段等" —— 否则一条短文本行（如 "#BEAT 1 420 400"）
+  //   会被卡在缓冲里，直到后面又来数据才被处理。文本行按字节即时消掉，只有帧头才等齐。
+  let i = 0;
+  while (i < rxBuf.length) {
+    if (rxBuf[i] === STM_HEAD) {
+      if (rxBuf.length - i < STM_FRAME) break;          // 帧还没收全，等下一批
+      if (rxBuf[i + STM_FRAME - 1] === 0x0D) {
+        const ch = [];
+        for (let k = 0; k < 3; k++) {
+          const o = i + 1 + 4 * k;
+          dv.setUint8(0, rxBuf[o]);
+          dv.setUint8(1, rxBuf[o + 1]);
+          dv.setUint8(2, rxBuf[o + 2]);
+          dv.setUint8(3, rxBuf[o + 3]);
+          ch.push(dv.getFloat32(0, true));
+        }
+        latest.angle = ch[0];
+        latest.enc1  = ch[1];
+        latest.pwm   = Number.isFinite(ch[2]) ? ch[2] : 0;
+        latest.hasRaw = false;
+        onFrame();
+        i += STM_FRAME;
+        continue;
+      }
+      errors++;                                          // 有帧头但尾部不是 0D：当脏字节丢掉
+    }
+    feedText(rxBuf[i]);                                  // 文本行（#CAL/#OK…）不进错误计数
+    i++;
+  }
+  rxBuf = rxBuf.slice(i);
+}
+
+function feedText(b) {
+  if (b === 10) { handleLine(txtAcc); txtAcc = ""; }
+  else if (b === 13) { }
+  else if (b >= 32 && b < 127) { if (txtAcc.length < 120) txtAcc += String.fromCharCode(b); }
+  else txtAcc = "";
+}
+
+function handleLine(t) {
+  t = t.trim();
+  if (!t) return;
+  if (t[0] === '#') { log('← ' + t); textLines++; }
+
+  // 固件拒绝命令：解释成人话（否则只会看到一行 #ERR NOTREADY，很容易当成“没反应”）
+  if (t.indexOf('#ERR') === 0) {
+    const why = t.slice(4).trim();
+    lastErr = why;                                    // 供节拍校验引用
+    let hint;
+    if (why.indexOf('NOTREADY') >= 0)
+      hint = 'NOTREADY：固件要求 Flag_Stop=0 且处于【手动平衡】（hand_start=1 / auto_start=0）。' +
+             '如果刚倒过或按过复位，请先点「起摆/停止」重新起摆，等状态显示 RUN 再执行该操作';
+    else if (why.indexOf('BUSY') >= 0) hint = 'BUSY：固件正在起摆/运行中，稍后再试';
+    else if (why === '') hint = '空原因 = 固件不认识这条命令 —— 板子里烧的可能是没有 BEAT/BAMP/BTICK（或 POS）的旧固件，' +
+                                '需要重新编译下载 `STM32_Pendulum` 的最新 control.c';
+    else hint = why;
+    log('⚠ 固件拒绝：' + hint, 'e');
+  }
+
+  let m = t.match(/#CAL\s+(-?\d+)\s+(-?\d+)\s+(\d+)/);
+  if (m) { fwProbe.cal = true; $('angleZero').value = m[1]; saveProtoSettings(); log('已同步固件零点 ' + m[1]); }
+  m = t.match(/#CFG\s+(-?\d+)\s+(-?\d+)/);
+  if (m) {
+    fwProbe.cfg = true;
+    $('pAmp').value = clamp(+m[1], 10, 520);
+    $('pSpd').value = clamp(65536 / (+m[2] * 200), 0.5, 20);
+    syncLabels();
+  }
+  m = t.match(/#VCFG\s+(-?\d+)\s+(-?\d+)/);
+  if (m) {
+    fwProbe.vcfg = true;
+    $('vAmp').value = m[1];
+    $('vSpd').value = clamp(65536 / (+m[2] * 200), 0.5, 20);
+    syncLabels();
+  }
+  m = t.match(/#BEAT\s+(\d)\s+(-?\d+)\s+(\d+)/);
+  if (m) {
+    fwProbe.beat = true;
+    beatMode = +m[1];
+    // 节拍幅值/周期与位置曲线共用两个滑条；BTICK 是【每拍】 tick，换算成整轮周期
+    if (beatMode > 0) beatBeatsLast = (beatMode === 2) ? 3 : 4;
+    const beats = beatBeatsLast;
+    if (+m[2]) { $('pAmp').value = clamp(+m[2], 10, 520); }
+    if (+m[3]) { $('pSpd').value = clamp(+m[3] * beats / 200, 0.5, 20); }
+    syncLabels();
+  }
+  m = t.match(/#VMODE\s+(\d)/);
+  if (m) { velMode = +m[1]; }
+  m = t.match(/#MODE\s+(\d)/);
+  if (m) { trajMode = +m[1]; }
+  if (t.indexOf('#OK RESET') === 0) {
+    runState = 0; trajMode = 0; velMode = 0; beatMode = 0; stmTgtCnt = null;
+  }
+  if (t.indexOf('#OK SWING') === 0 || t.indexOf('#ERR BUSY') === 0) runState = 1;
+}
+
+// ---- FPGA：AA 55 … 102 字节 ----
+function findHeader(b) {
+  for (let i = 0; i + 1 < b.length; i++)
+    if (b[i] === 0xAA && b[i+1] === 0x55) return i;
+  return -1;
+}
+
+function feedFpga() {
+  while (rxBuf.length >= FRAME_LEN) {
+    const h = findHeader(rxBuf);
+    if (h < 0) { rxBuf = rxBuf.slice(Math.max(0, rxBuf.length - 1)); break; }
+    if (h > 0) { rxBuf = rxBuf.slice(h); if (rxBuf.length < FRAME_LEN) break; }
+
+    if (rxBuf[100] !== 0x0D || rxBuf[101] !== 0x0A) {
+      errors++; rxBuf = rxBuf.slice(1); continue;
+    }
+    let cs = 0;
+    for (let i = 2; i <= 98; i++) cs ^= rxBuf[i];
+    if (cs !== rxBuf[99]) { chkFail++; rxBuf = rxBuf.slice(1); continue; }
+
+    const u16 = o => (rxBuf[o] << 8) | rxBuf[o+1];
+    const s16 = o => { const v = u16(o); return v >= 0x8000 ? v - 0x10000 : v; };
+
+    latest.angle    = u16(2) & 0x0FFF;
+    latest.enc1     = u16(4);
+    latest.enc2     = u16(6);
+    latest.pwm      = s16(8);
+    latest.state    = rxBuf[10] & 0x0F;
+    latest.wheelSel = (rxBuf[10] >> 5) & 1;
+    latest.armed    = (rxBuf[10] >> 4) & 1;
+    latest.mode     = (rxBuf[11] >> 4) & 0x07;
+    latest.rawAngle = ((rxBuf[11] & 0x0F) << 8) | rxBuf[12];
+    latest.hasRaw   = true;
+    latest.posTgt   = s16(13);
+    latest.posPwm   = s16(15);
+    latest.micLvl   = u16(17);
+    latest.abV      = s16(19);
+    for (let k = 0; k < AUD_N; k++) {
+      const o = 21 + k * 2;
+      const v = (rxBuf[o] << 8) | rxBuf[o+1];
+      latest.audio[k] = v >= 0x8000 ? v - 0x10000 : v;
+    }
+    rxBuf = rxBuf.slice(FRAME_LEN);
+    onFrame();
+  }
+}
+
+// ---------------------------------------------------------------- 数据入缓存
+function onFrame() {
+  frames++;
+  hasData = true;
+
+  const az = num($('angleZero'), PROTO === 'fpga' ? 768 : 3204);
+  const ez = num($('encZero'), 10000);
+  const cpr = num($('cpr'), ENC_PER_REV_DEF) || ENC_PER_REV_DEF;
+  const span = num($('adcSpan'), 4160) || 4160;
+
+  let angDeg, posDeg, posCnt;
+  if (PROTO === 'stm32') {
+    angDeg = (latest.angle - az) * 360 / span;
+  } else {
+    angDeg = (latest.angle - az) * 180 / ANG_PER_180;
+  }
+  posCnt = latest.enc1 - ez;                 // 原始计数（协议口径，不改符号）
+  posDeg = posDegOfEnc(latest.enc1);         // 显示角度（已乘 SIGN_ARM）
+  angDeg *= SIGN_PEND;
+
+  // STM32 固件不会主动上报“停机”，RUN 徽标只来自一次性的 #OK SWING。
+  // 摆杆一旦倾斜 >40° 持续 400ms，就认为它已经倒了/停机，把状态改回 IDLE，
+  // 否则会出现“页面显示 RUN、固件却回 #ERR NOTREADY”的矛盾。
+  if (PROTO === 'stm32') {
+    const now = performance.now();
+    if (Math.abs(angDeg) > 40) {
+      if (!tiltSince) tiltSince = now;
+      else if (now - tiltSince > 400 && runState) {
+        runState = 0;
+        log('检测到摆杆倾倒（|角度|>40°），状态改为 IDLE（固件不会主动上报停机）');
+      }
+    } else tiltSince = 0;
+  }
+
+  if (!paused) {
+    samples.push({ t: performance.now() / 1000,
+                   ang: angDeg, pos: posDeg, posCnt: posCnt,
+                   pwm: latest.pwm, mic: latest.micLvl });
+    if (samples.length > MAX_SAMPLES) samples.splice(0, samples.length - MAX_SAMPLES);
+    if (PROTO === 'fpga') {
+      for (let k = 0; k < AUD_N; k++) audio.push(latest.audio[k]);
+      if (audio.length > MAX_AUDIO) audio.splice(0, audio.length - MAX_AUDIO);
+    }
+  }
+
+  const now = performance.now();
+  if (lastFrameTime) {
+    const dt = now - lastFrameTime;
+    if (dt > 0 && dt < 500) {
+      const inst = 1000 / dt;
+      rateEma = rateEma ? rateEma * 0.9 + inst * 0.1 : inst;
+    }
+  }
+  lastFrameTime = now;
+  lastFrameAt = now;
+}
+
+function updateCnt() {
+  $('cntTag').textContent = '帧 ' + frames + ' / 错 ' + (errors + chkFail);
+  $('rxTag').textContent = '字节 ' + rxBytes;
+  $('rxTag').className = rxBytes > 0 ? 'tag' : 'tag warn';
+}
+
+// ---- 原始字节记录（诊断用）----
+const RAW_MAX = 256;
+let rxBytes = 0, lastByteAt = 0, rawHist = [];
+let textLines = 0;
+let lastErr = null;                                // 固件最近一次 #ERR 的原因（null = 还没收到过）
+const fwProbe = { cal: false, cfg: false, vcfg: false, beat: false };
+let noFrameWarned = false, noFrameAt = 0;
+
+function addRawBytes(bytes) {
+  rxBytes += bytes.length;
+  lastByteAt = performance.now();
+  for (let i = 0; i < bytes.length; i++) rawHist.push(bytes[i]);
+  if (rawHist.length > RAW_MAX) rawHist.splice(0, rawHist.length - RAW_MAX);
+}
+
+function dumpRaw() {
+  if (!rawHist.length) {
+    log('还没有收到任何字节（检查：是否已连接 / 波特率 / TX-RX 是否交叉 / 别页是否占着端口）', 'e');
+    return;
+  }
+  const hex = rawHist.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+  const asc = rawHist.map(b => (b >= 32 && b < 127) ? String.fromCharCode(b) : '.').join('');
+  const dt = lastByteAt ? ((performance.now() - lastByteAt) / 1000).toFixed(1) : '–';
+  log(`最近 ${rawHist.length} 字节（${dt}s 前为止） HEX: ${hex}`);
+  log(`                                    ASCII: ${asc}`);
+}
+
+// 收到字节但解析不出帧 —— 基本就是波特率或协议拨码不对
+function checkNoFrame() {
+  const now = performance.now();
+  if (noFrameWarned || frames > 0 || rxBytes === 0) return;
+  if (textLines > 0) return;                           // 已经能正常收到文本行，说明协议/波特率没问题
+  if (now - lastByteAt > 1500) return;                 // 早就不再来数据了，不啰嗦
+  if (now - noFrameAt < 2000) return;
+  noFrameAt = now;
+  noFrameWarned = true;
+  const cur = PROTO === 'stm32' ? 128000 : 115200;
+  log(`⚠ 已收到 ${rxBytes} 字节，但一个帧都没解析出来 —— 当前是「${PROTO === 'stm32' ? 'STM32' : 'FPGA'}」协议，` +
+      `会把固定用 ${cur} 波特率打开串口；请确认底部拨码位置与实物板子一致。点「原始数据」可看收到的内容。`, 'e');
+}
+
+// ---------------------------------------------------------------- 换算工具
+function pwmFull() { return PROTO === 'stm32' ? 6900 : 5175; }
+
+function currentPosCnt() {
+  const ez = num($('encZero'), 10000);
+  return latest.enc1 - ez;
+}
+function targetCnt() {
+  if (PROTO === 'fpga') return latest.posTgt;
+  return stmTgtCnt;
+}
+
+// 编码器原始计数 → 摆臂显示角度（°）
+//   【符号约定】显示正向 = 计数【减小】。两套机构实测都是这个方向：
+//     · STM32 原版 monitor.html：encDeg = (zero - encRaw) * 360/cpr
+//     · FPGA  pos_console.html：armDeg = SIGN_ARM(-1) * (enc - zero) * 360/cpr
+//   所以这里对两套协议统一用 (zero - enc)，不要再按协议反转。
+function posDegOfEnc(enc) {
+  const ez = num($('encZero'), 10000);
+  const cpr = num($('cpr'), ENC_PER_REV_DEF) || ENC_PER_REV_DEF;
+  return SIGN_ARM * (ez - enc) * 360 / cpr;
+}
+
+// 当前协议的「目标计数」→ 显示角度
+//   STM32 的 POS n 是【绝对】编码器值，FPGA 的 0x0F 是【相对】计数（enc - zero），故取反。
+function countToDeg(cnt) {
+  if (cnt === null || cnt === undefined) return null;
+  const ez = num($('encZero'), 10000);
+  const cpr = num($('cpr'), ENC_PER_REV_DEF) || ENC_PER_REV_DEF;
+  return SIGN_ARM * (PROTO === 'stm32' ? (ez - cnt) : (0 - cnt)) * 360 / cpr;
+}
+// 显示角度 → 当前协议的「目标计数」
+function degToCount(deg) {
+  const ez = num($('encZero'), 10000);
+  const cpr = num($('cpr'), ENC_PER_REV_DEF) || ENC_PER_REV_DEF;
+  return PROTO === 'stm32'
+    ? Math.round(ez - deg * cpr / 360 / SIGN_ARM)
+    : Math.round(0 - deg * cpr / 360 / SIGN_ARM);
+}
+function targetDeg() { return countToDeg(targetCnt()); }
+
+// ---------------------------------------------------------------- 画布
+function setupCanvas(cv) {
+  const dpr = window.devicePixelRatio || 1;
+  const r = cv.getBoundingClientRect();
+  const w = Math.max(200, Math.round(r.width * dpr));
+  const h = Math.max(100, Math.round(r.height * dpr));
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w: r.width, h: r.height };
+}
+
+const rangeCache = {};
+let lastT = 0;
+
+function drawSeries(cv, key, color, unit, minSpan) {
+  const o = setupCanvas(cv);
+  const ctx = o.ctx, w = o.w, h = o.h;
+  const padL = 46, padR = 8, padT = 10, padB = 18;
+  const iw = Math.max(10, w - padL - padR);
+  const ih = Math.max(10, h - padT - padB);
+  ctx.clearRect(0, 0, w, h);
+
+  const winSec = num($('span'), 10);
+  const now = performance.now() / 1000;
+  const t0 = now - winSec;
+
+  const pts = [];
+  for (let i = samples.length - 1; i >= 0; i--) {
+    const s = samples[i];
+    if (s.t < t0) break;
+    pts.push(s);
+  }
+  pts.reverse();
+
+  let lo, hi;
+  if (pts.length >= 2) {
+    let mn = Infinity, mx = -Infinity;
+    for (const p of pts) { const v = p[key]; if (v < mn) mn = v; if (v > mx) mx = v; }
+    if (!Number.isFinite(mn)) { mn = 0; mx = 1; }
+    if (mx - mn < minSpan) { const c = (mn + mx) / 2; mn = c - minSpan/2; mx = c + minSpan/2; }
+    const pad = (mx - mn) * 0.12;
+    lo = mn - pad; hi = mx + pad;
+  } else { lo = -1; hi = 1; }
+
+  const prev = rangeCache[key];
+  if (prev) { lo = prev[0] + (lo - prev[0]) * 0.25; hi = prev[1] + (hi - prev[1]) * 0.25; }
+  rangeCache[key] = [lo, hi];
+
+  const yOf = v => padT + ih - (v - lo) / (hi - lo) * ih;
+  const xOf = t => padL + (t - t0) / winSec * iw;
+
+  ctx.strokeStyle = "#1c2430"; ctx.fillStyle = "#8b949e";
+  ctx.font = "11px Consolas, monospace"; ctx.lineWidth = 1;
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (let i = 0; i <= 4; i++) {
+    const v = lo + (hi - lo) * i / 4;
+    const y = Math.round(yOf(v)) + 0.5;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + iw, y); ctx.stroke();
+    ctx.fillText(v.toFixed(key === 'pwm' || key === 'posCnt' ? 0 : 1), padL - 6, y);
+  }
+  if (lo < 0 && hi > 0) {
+    const yz = Math.round(yOf(0)) + 0.5;
+    ctx.strokeStyle = "#334155";
+    ctx.beginPath(); ctx.moveTo(padL, yz); ctx.lineTo(padL + iw, yz); ctx.stroke();
+  }
+
+  if (pts.length >= 2) {
+    ctx.strokeStyle = color; ctx.lineWidth = 1.6; ctx.lineJoin = "round";
+    ctx.beginPath();
+    for (let i = 0; i < pts.length; i++) {
+      const x = xOf(pts[i].t), y = yOf(pts[i][key]);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    const lp = pts[pts.length - 1];
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(xOf(lp.t), yOf(lp[key]), 2.6, 0, Math.PI*2); ctx.fill();
+  } else {
+    ctx.fillStyle = "#8b949e"; ctx.textAlign = "center";
+    ctx.fillText("等待数据…", padL + iw/2, padT + ih/2);
+  }
+
+  ctx.fillStyle = "#8b949e"; ctx.textAlign = "left"; ctx.textBaseline = "top";
+  ctx.fillText(unit, padL + 2, padT + 2);
+  ctx.textAlign = "right"; ctx.textBaseline = "bottom";
+  ctx.fillText("-" + winSec + "s", padL + iw, h - 3);
+  ctx.textAlign = "left";
+  ctx.fillText("now", padL + 2, h - 3);
+}
+
+// ---------------------------------------------------------------- 麦克风
+function niceCeil(v) {
+  const e = Math.pow(10, Math.floor(Math.log10(v)));
+  const m = v / e;
+  const f = m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10;
+  return f * e;
+}
+
+let micPeak = 0;
+function drawMic() {
+  const o = setupCanvas($('cvMic'));
+  const g = o.ctx, w = o.w, h = o.h;
+  g.clearRect(0, 0, w, h);
+
+  const padL = 52, padR = 10, padT = 8, padB = 14;
+  const pw = w - padL - padR, ph = h - padT - padB;
+  if (pw <= 4 || ph <= 4) return;
+
+  const MIC_WIN = 0.4;   // 麦克风用独立窗口：0.4 s ≈ 781 点，波形才不会压成实心带
+  const showN = Math.max(64, Math.round(MIC_WIN * AUD_FS));
+  const start = Math.max(0, audio.length - showN);
+  const n = audio.length - start;
+
+  let pk = 0;
+  for (let k = start; k < audio.length; k++) {
+    const a = audio[k] < 0 ? -audio[k] : audio[k];
+    if (a > pk) pk = a;
+  }
+  micPeak = pk;
+  const mx = niceCeil(Math.max(pk * 1.1, 64));
+
+  g.strokeStyle = '#1f2630'; g.lineWidth = 1;
+  g.beginPath();
+  for (let k = 0; k <= 2; k++) {
+    const y = Math.round(padT + ph * k / 2) + 0.5;
+    g.moveTo(padL, y); g.lineTo(padL + pw, y);
+  }
+  for (let k = 0; k <= 10; k++) {
+    const x = Math.round(padL + pw * k / 10) + 0.5;
+    g.moveTo(x, padT); g.lineTo(x, padT + ph);
+  }
+  g.stroke();
+
+  g.strokeStyle = '#3d444d'; g.setLineDash([4,4]);
+  const y0 = Math.round(padT + ph / 2) + 0.5;
+  g.beginPath(); g.moveTo(padL, y0); g.lineTo(padL + pw, y0); g.stroke();
+  g.setLineDash([]);
+
+  g.fillStyle = '#6e7681'; g.font = '10px Consolas, monospace';
+  g.textAlign = 'right'; g.textBaseline = 'middle';
+  g.fillText('' + mx, padL - 5, padT + 0.5);
+  g.fillText('0', padL - 5, padT + ph / 2);
+  g.fillText('' + (-mx), padL - 5, padT + ph);
+
+  g.fillStyle = '#8b949e'; g.textAlign = 'left'; g.textBaseline = 'top';
+  if (PROTO === 'fpga' && n >= 2)
+    g.fillText('1953 Hz · 窗口 0.4 s · 峰值 ' + pk, padL + 2, padT + 2);
+
+  if (n < 2) return;                              // 没数据就空着，不写任何提示
+
+  const Y = v => padT + ph * (0.5 - clamp(v / mx, -1, 1) * 0.46);
+  g.strokeStyle = '#4db6ac'; g.lineWidth = 1.2; g.lineJoin = 'round';
+  g.beginPath();
+  const perPx = n / pw;
+  if (perPx > 2) {
+    for (let px = 0; px < pw; px++) {
+      const i0 = start + Math.floor(px * perPx);
+      const i1 = Math.min(audio.length, start + Math.floor((px + 1) * perPx));
+      if (i1 <= i0) continue;
+      let mn = 1e9, mxv = -1e9;
+      for (let k = i0; k < i1; k++) {
+        const v = audio[k];
+        if (v < mn) mn = v;
+        if (v > mxv) mxv = v;
+      }
+      const x = padL + px + 0.5;
+      g.moveTo(x, Y(mxv)); g.lineTo(x, Y(mn));
+    }
+  } else {
+    for (let k = 0; k < n; k++) {
+      const x = padL + pw * k / (n - 1);
+      if (k === 0) g.moveTo(x, Y(audio[start + k]));
+      else g.lineTo(x, Y(audio[start + k]));
+    }
+  }
+  g.stroke();
+}
+
+// ---------------------------------------------------------------- 姿态
+const animTrail = [];
+let armGeo = null;
+let dragging = false, dragTimer = 0;
+
+function wrap180(d) {
+  d = d % 360;
+  if (d >  180) d -= 360;
+  if (d < -180) d += 360;
+  return d;
+}
+
+function drawModel() {
+  const o = setupCanvas($('cvModel'));
+  const g = o.ctx, w = o.w, h = o.h;
+  g.clearRect(0, 0, w, h);
+
+  const az = num($('angleZero'), PROTO === 'fpga' ? 768 : 3204);
+  const ez = num($('encZero'), 10000);
+  const cpr = num($('cpr'), ENC_PER_REV_DEF) || ENC_PER_REV_DEF;
+  const span = num($('adcSpan'), 4160) || 4160;
+
+  let angDeg = 0, posDeg = 0;
+  if (hasData) {
+    angDeg = SIGN_PEND * (latest.angle - az) * (PROTO === 'stm32' ? 360 / span : 180 / ANG_PER_180);
+    posDeg = posDegOfEnc(latest.enc1);
+  }
+  const tgt = targetDeg();
+
+  const halfW = w / 2;
+  const cx = halfW / 2, cy = h / 2 + 6;
+  const R = Math.min(halfW * 0.62, h * 0.34);
+  armGeo = { cx, cy, R };
+
+  const rad = posDeg * Math.PI / 180;
+  const trad = (tgt === null ? posDeg : tgt) * Math.PI / 180;
+
+  g.strokeStyle = '#1f2630'; g.lineWidth = 1;
+  g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.stroke();
+  g.strokeStyle = '#161d26';
+  g.beginPath();
+  g.moveTo(cx - R - 8, cy); g.lineTo(cx + R + 8, cy);
+  g.moveTo(cx, cy - R - 8); g.lineTo(cx, cy + R + 8);
+  g.stroke();
+
+  g.strokeStyle = 'rgba(255,183,77,.45)'; g.lineWidth = 1.5; g.setLineDash([4,4]);
+  g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + R * Math.cos(trad), cy + R * Math.sin(trad)); g.stroke();
+  g.setLineDash([]);
+
+  const tipX = cx + R * Math.cos(rad), tipY = cy + R * Math.sin(rad);
+  for (let i = 0; i < animTrail.length; i++) {
+    const a = (i + 1) / animTrail.length;
+    g.fillStyle = `rgba(129,199,132,${a * 0.25})`;
+    g.beginPath(); g.arc(animTrail[i][0], animTrail[i][1], 1.5, 0, Math.PI * 2); g.fill();
+  }
+
+  g.strokeStyle = dragging ? '#a5d6a7' : '#81c784';
+  g.lineWidth = 5; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(cx, cy); g.lineTo(tipX, tipY); g.stroke();
+
+  const proj = Math.sin(angDeg * Math.PI / 180) * R * 0.8;
+  g.strokeStyle = Math.abs(angDeg) < 5 ? '#3fb950' : '#4fc3f7';
+  g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(tipX, tipY);
+  g.lineTo(tipX + proj * Math.cos(rad), tipY + proj * Math.sin(rad));
+  g.stroke();
+
+  g.fillStyle = '#30363d';
+  g.beginPath(); g.arc(cx, cy, 5, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#8b949e';
+  g.beginPath(); g.arc(cx, cy, 2.2, 0, Math.PI * 2); g.fill();
+  g.fillStyle = dragging ? '#ffffff' : '#c9d1d9';
+  g.beginPath(); g.arc(tipX, tipY, dragging ? 5 : 3.5, 0, Math.PI * 2); g.fill();
+
+  if (!paused && hasData) {
+    animTrail.push([tipX, tipY]);
+    if (animTrail.length > 80) animTrail.shift();
+  }
+
+  const sx = halfW + cx, sy = cy;
+  const L = R * 1.7;
+  const r2 = angDeg * Math.PI / 180;
+
+  g.strokeStyle = '#1f2630'; g.setLineDash([3,4]); g.lineWidth = 1;
+  g.beginPath(); g.moveTo(sx, sy); g.lineTo(sx, sy - L - 12); g.stroke();
+  g.setLineDash([]);
+
+  g.strokeStyle = '#30363d';
+  g.beginPath(); g.moveTo(sx - R * 0.9, sy); g.lineTo(sx + R * 0.9, sy); g.stroke();
+
+  const ex = sx + L * Math.sin(r2), ey = sy - L * Math.cos(r2);
+  g.strokeStyle = Math.abs(angDeg) < 5 ? '#3fb950'
+                : (Math.abs(angDeg) < 15 ? '#ffb74d' : '#f85149');
+  g.lineWidth = 4; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(sx, sy); g.lineTo(ex, ey); g.stroke();
+  g.fillStyle = g.strokeStyle;
+  g.beginPath(); g.arc(ex, ey, 5, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#30363d';
+  g.beginPath(); g.arc(sx, sy, 4.5, 0, Math.PI * 2); g.fill();
+
+  g.fillStyle = '#8b949e'; g.font = '11px Consolas, monospace';
+  g.textAlign = 'center'; g.textBaseline = 'top';
+  g.fillText('摆杆 ' + fmt(angDeg, 1) + '°', sx, 6);
+  g.fillText('摆臂 ' + fmt(wrap180(posDeg), 1) + '° · 目标 ' +
+             (tgt === null ? '—' : fmt(wrap180(tgt), 1) + '°'), cx, h - 16);
+}
+
+// 屏幕角度保持连续（避免 atan2 在 ±180° 处跳变 → 目标一下跳一整圈）
+function unwrapDeg(d, prev) {
+  if (prev === null || prev === undefined) return d;
+  let x = d;
+  while (x - prev >  180) x -= 360;
+  while (x - prev < -180) x += 360;
+  return x;
+}
+
+let dragCont = null;      // 拖动中的连续屏幕角度
+
+function animAngleAt(ev) {
+  if (!armGeo) return null;
+  const r = $('cvModel').getBoundingClientRect();
+  const x = ev.clientX - r.left - armGeo.cx;
+  const y = ev.clientY - r.top  - armGeo.cy;
+  if (ev.clientX - r.left > r.width / 2) return null;
+  if (Math.hypot(x, y) < armGeo.R * 0.2) return null;
+  const raw = Math.atan2(y, x) * 180 / Math.PI;   // 屏幕角：+x 向右、+y 向下
+  dragCont = unwrapDeg(raw, dragCont);
+  return dragCont;
+}
+
+$('cvModel').addEventListener('pointerdown', ev => {
+  dragCont = null;                 // 重新起算，第一帧用原始 atan2
+  const deg = animAngleAt(ev);
+  if (deg === null) return;
+  if (!port) { log('未连接串口', 'e'); return; }
+  dragging = true;
+  $('cvModel').setPointerCapture(ev.pointerId);
+  sendPosDeg(deg);
+  ev.preventDefault();
+});
+$('cvModel').addEventListener('pointermove', ev => {
+  if (!dragging) return;
+  const now = performance.now();
+  if (now - dragTimer < 60) return;
+  dragTimer = now;
+  const deg = animAngleAt(ev);
+  if (deg === null) return;
+  sendPosDeg(deg);
+  ev.preventDefault();
+});
+function endDrag(ev) {
+  if (!dragging) return;
+  dragging = false;
+  dragCont = null;
+  try { $('cvModel').releasePointerCapture(ev.pointerId); } catch (_) {}
+}
+$('cvModel').addEventListener('pointerup', endDrag);
+$('cvModel').addEventListener('pointercancel', endDrag);
+
+// ---------------------------------------------------------------- 读数
+let labelSig = -1;
+function updateReadouts() {
+  if (!hasData) return;
+  const az = num($('angleZero'), PROTO === 'fpga' ? 768 : 3204);
+  const ez = num($('encZero'), 10000);
+  const cpr = num($('cpr'), ENC_PER_REV_DEF) || ENC_PER_REV_DEF;
+  const span = num($('adcSpan'), 4160) || 4160;
+
+  let angDeg, posDeg, posCnt;
+  angDeg = SIGN_PEND * (latest.angle - az) * (PROTO === 'stm32' ? 360 / span : 180 / ANG_PER_180);
+  posCnt = latest.enc1 - ez;                 // 原始计数（协议口径）
+  posDeg = posDegOfEnc(latest.enc1);
+
+  const tgt = targetCnt();
+  const posErr = (tgt === null) ? null
+               : (PROTO === 'stm32' ? (latest.enc1 - tgt) : (posCnt - tgt));
+
+  $('kAng').textContent = fmt(angDeg, 2) + '°';
+  $('kAngleRaw').textContent = latest.hasRaw
+    ? `${latest.rawAngle} / ${latest.angle}`
+    : `${Math.round(latest.angle)}`;
+  $('kPos').textContent = fmt(posDeg, 1) + '°';
+  $('kPosTgt').textContent = (tgt === null)
+    ? '— / —'
+    : `${Math.round(tgt)} / ${Math.round(posErr)}`;
+  $('kPwm').textContent = Math.round(latest.pwm) + '';
+  $('kPwmSub').textContent = PROTO === 'fpga'
+    ? `位置环 ${latest.posPwm} · α-β ${latest.abV}`
+    : '—';
+
+  // 状态 / 模式徽标（两种协议各自的语义）
+  if (PROTO === 'fpga') {
+    const st = STATE_NAMES[latest.state] ?? ('0x' + latest.state.toString(16));
+    $('stVal').textContent = st;
+    $('stTag').textContent = st;
+    $('stTag').className = 'badge' + (latest.state === 2 ? ' bal' : latest.state === 1 ? ' sw' : '');
+    $('modeVal').textContent = MODE_NAMES[latest.mode] ?? '—';
+    $('modeTag').textContent = latest.mode === 0 ? '纯稳摆'
+                             : MODE_NAMES[latest.mode] + (latest.armed ? '·运行中' : '·待确认');
+    $('modeTag').className = 'badge' + (latest.armed ? ' bal' : (latest.mode ? ' sw' : ''));
+    // 合并后的统一按钮：FPGA 模式 1=正弦 2=三角 3=斜坡 4=四四拍
+    const on = latest.armed === 1;
+    $('btnSine').classList.toggle('on', on && latest.mode === 1);
+    $('btnTri').classList.toggle('on',  on && latest.mode === 2);
+    $('btnRamp').classList.toggle('on', on && latest.mode === 3);
+    $('btnBeat4').classList.toggle('on', on && latest.mode === 4);
+    $('btnBeat3').classList.remove('on');
+    $('btnVSine').classList.remove('on');
+    $('btnVTri').classList.remove('on');
+    if (labelSig !== latest.mode * 2 + 1) { labelSig = latest.mode * 2 + 1; syncLabels(); }
+  } else {
+    $('stVal').textContent = runState ? 'RUN' : '停机';
+    $('stTag').textContent = runState ? 'RUN' : 'IDLE';
+    $('stTag').className = 'badge' + (runState ? ' bal' : '');
+    const mn = trajMode ? ['', '位置正弦', '位置三角', '位置斜坡'][trajMode]
+             : velMode ? ['', '速度正弦', '速度三角'][velMode]
+             : beatMode ? ['', '节拍 4/4', '节拍 3/4'][beatMode] : '纯稳摆';
+    $('modeVal').textContent = mn;
+    $('modeTag').textContent = mn;
+    $('modeTag').className = 'badge' + (runState ? ' bal' : '');
+    // STM32 组按钮高亮
+    $('btnSine').classList.toggle('on', trajMode === 1);
+    $('btnTri').classList.toggle('on', trajMode === 2);
+    $('btnRamp').classList.toggle('on', trajMode === 3);
+    $('btnVSine').classList.toggle('on', velMode === 1);
+    $('btnVTri').classList.toggle('on', velMode === 2);
+    $('btnBeat4').classList.toggle('on', beatMode === 1);
+    $('btnBeat3').classList.toggle('on', beatMode === 2);
+    if (labelSig !== beatMode * 2) { labelSig = beatMode * 2; syncLabels(); }
+  }
+
+  // 手轮状态（FPGA）
+  const wOn = wheelActive();
+  const wSel = PROTO === 'fpga' && latest.mode === 5;
+  $('wheelSw').classList.toggle('on', wOn);
+  $('wheelTag').textContent = wOn ? '跟随中' : (wSel ? '待确认' : '关闭');
+  $('wheelTag').style.color = wOn ? 'var(--green)' : 'var(--dim)';
+
+  $('micInfo').textContent = PROTO === 'fpga' ? `DFT ${latest.micLvl}` : 'DFT —';
+  $('micPkTag').textContent = '峰值 ' + (PROTO === 'fpga' ? micPeak : '—');
+  $('posTgtHint').textContent = (tgt === null)
+    ? '= —（误差 –）'
+    : `= ${countToDeg(tgt).toFixed(1)}°（误差 ${Math.round(posErr)} 计数）`;
+
+  $('rateTag').textContent = rateEma.toFixed(1) + ' Hz';
+  updateCnt();
+
+  if (lastFrameAt > 0 && performance.now() - lastFrameAt > 1500 && !paused) {
+    $('rateTag').textContent = '无数据';
+    $('rateTag').className = 'tag warn';
+  } else {
+    $('rateTag').className = 'tag';
+  }
+}
+
+// ---------------------------------------------------------------- 位置下发（两种协议都支持）
+//   n = 当前协议自己的「目标计数」：
+//     STM32：POS n 是绝对值（编码器原始计数）
+//     FPGA ：0x0F 是相对值（enc - 零点）
+//
+//   【为何必须斜坡下发】
+//     · STM32 固件里 MOVE_RATE_MAX = 6 counts/5ms ≈ 415°/s，这就是它唯一的位置环速度上限，
+//       而且 POSV 指令本想改速率、变量 Pos_Step 根本没接进限速器（死变量）→ 上位机无法让它变慢。
+//       415°/s 下加速度约 6000°/s²，摆杆必须前倾 >30° 才能提供这个加速度 → 直接倒。
+//     · FPGA 固件有 POS_SLEW_MAX 兜底，同样的阶跃看起来正常，但限速依旧更安全。
+//   → 上位机按「点动限速 °/s」自己走斜坡（带加减速段），每 40ms 下发一个小增量。
+function rawSendCounts(n, quiet) {
+  if (!port) return false;
+  n = Math.round(n);
+  if (PROTO === 'stm32') {
+    if (!sendText('POS ' + n, quiet)) return false;
+    stmTgtCnt = n;
+  } else {
+    if (wheelActive()) {
+      log('手轮模式运行中：目标由手轮决定，网页下发会被覆盖', 'e');
+      return false;
+    }
+    if (!sendParam(A.POS_TARGET, n)) return false;
+  }
+  $('posTgt').value = n;
+  return true;
+}
+
+// ---- 斜坡引擎 ----
+const RAMP_DT = 0.04;                  // s
+let rampGoal = null, rampCurF = 0, rampVel = 0, rampDir = 0, rampTimer = null, rampLast = null;
+
+function rampRateDeg() {
+  return Math.max(5, Math.min(400, num($('jogRate'), PROTO === 'stm32' ? 50 : 150)));
+}
+function rampStop() {
+  if (rampTimer) { clearInterval(rampTimer); rampTimer = null; }
+  rampGoal = null; rampVel = 0; rampDir = 0; rampLast = null;
+}
+// 斜坡起点：当前实测位置，换算成本协议的目标计数口径（没收到帧就返回 NaN）
+function rampBaseCounts() {
+  if (!hasData || !Number.isFinite(latest.enc1)) return NaN;
+  const ez = num($('encZero'), 10000);
+  return PROTO === 'stm32' ? Math.round(latest.enc1) : Math.round(latest.enc1 - ez);
+}
+function rampTick() {
+  if (rampGoal === null) { rampStop(); return; }
+  const cpr = num($('cpr'), ENC_PER_REV_DEF) || ENC_PER_REV_DEF;
+  const vmax = rampRateDeg() * cpr / 360;      // counts/s
+  const acc  = vmax / 0.40;                    // 0→全速 0.4s
+  const rem  = rampGoal - rampCurF;
+  if (Math.abs(rem) < 0.5) {                   // 到位
+    if (rampLast !== rampGoal) { rawSendCounts(rampGoal); rampLast = rampGoal; }
+    rampStop();
+    return;
+  }
+  const dir = rem > 0 ? 1 : -1;
+  if (dir !== rampDir) { rampDir = dir; rampVel = 0; }
+  const vBrk = Math.sqrt(2 * acc * Math.abs(rem));   // 还能刹住的速度
+  rampVel = Math.min(Math.min(vmax, vBrk), rampVel + acc * RAMP_DT);
+  rampCurF += dir * Math.min(Math.abs(rem), rampVel * RAMP_DT);
+  const out = Math.round(rampCurF);
+  if (out !== rampLast) { rawSendCounts(out, true); rampLast = out; }
+}
+function sendCounts(n, smooth = true) {
+  if (!port) { log('未连接串口', 'e'); return false; }
+  n = Math.round(n);
+  if (!smooth) { rampStop(); return rawSendCounts(n); }
+  if (rampGoal === null) {
+    const base = rampBaseCounts();
+    if (!Number.isFinite(base)) {
+      log('还没收到遥测：直接下发目标（不做斜坡）', 'e');
+      return rawSendCounts(n);
+    }
+    rampCurF = base;
+    rampVel = 0; rampDir = 0; rampLast = null;
+    rampTimer = setInterval(rampTick, RAMP_DT * 1000);
+  }
+  rampGoal = n;
+  rampTick();                                  // 立刻走一步，手感无延迟
+  return true;
+}
+
+function sendPosDeg(deg) { return sendCounts(degToCount(deg)); }
+
+function bumpDeg(deg) {
+  const t = (rampGoal !== null) ? rampGoal : targetCnt();
+  const curDeg = (t === null) ? 0 : countToDeg(t);
+  sendPosDeg(curDeg + deg);
+}
+
+// ---------------------------------------------------------------- FPGA：模式 / 手轮
+function wheelActive() {
+  return PROTO === 'fpga' && latest.state === 2 && latest.mode === 5 && latest.armed === 1;
+}
+
+function applyFirmwareMode(mode, ampOv, perOv) {
+  if (PROTO !== 'fpga') return;                 // STM32 模式：空按键
+  if (!port) { log('未连接串口', 'e'); return; }
+  if (latest.state !== 2) { log('非平衡态：请先起摆进入 BALANCE', 'e'); return; }
+  if (wheelActive() && mode !== 5) sendCmd(CMD.DISARM);
+
+  if (mode === 0) {
+    sendCmd(CMD.DISARM);
+    sendParam(A.MOVE_MODE, 0);
+    log('退出运动模式 → 纯稳摆');
+    return;
+  }
+  const amp  = Math.round(ampOv != null ? ampOv : +$('pAmp').value);
+  const perS = (perOv != null ? perOv : +$('pSpd').value);
+  sendParam(A.MOVE_AMP, amp);
+  sendParam(A.BEAT_AMP, amp);                   // 四四拍拍幅跟随同一个幅度
+  sendParam(A.MOVE_PERIOD, Math.max(100, Math.round(perS * 200)));
+  sendParam(A.MOVE_MODE, mode);
+  sendCmd(CMD.ARM);
+  log(`模式 ${mode}（${MODE_NAMES[mode]}）已下发并确认；幅度 ${amp} / 周期 ${perS}s`, 'k');
+}
+
+// ---------------------------------------------------------------- 运动模式（两协议统一入口）
+//   1=正弦  2=三角  3=斜坡(=FPGA 线性)  4=四四拍
+function setCurve(mode) {
+  if (!port) { log('未连接串口', 'e'); return; }
+  if (PROTO === 'fpga') { applyFirmwareMode(mode); return; }
+  // STM32：SINE / TRI / RAMP / BEAT 都是固件内的开关，再点一次就关
+  if (mode === 1) sendText('SINE');
+  else if (mode === 2) sendText('TRI');
+  else if (mode === 3) sendText('RAMP');
+  else if (mode === 4) {
+    if (beatMode === 1) sendText('BEAT 0');
+    else stmBeatStart(4);
+  }
+}
+
+// STM32 节拍：固件里的节拍是【方波】—— 每拍把目标直接从 +A 跳到 -A（阶跃 = 2×A counts），
+// 只靠 MOVE_RATE_MAX=6 counts/5ms(≈415°/s) 的硬限速去追，等于每隔一拍给摆臂一个速度阶跃。
+// 所以：① 启动前先把面板的幅度/周期同步给固件（否则固件用自己存的旧值，和面板不一致）；
+//       ② 幅度过大时直接告警（200 counts ≈ 69° 的阶跃一定会把摆杆甩倒）。
+function stmBeatStart(beats, ampOv, perOv, onDone) {    // beats = 4（4/4）或 3（3/4）
+  const amp  = Math.round(ampOv  != null ? ampOv  : +$('pAmp').value);
+  const perS = (perOv != null ? perOv : +$('pSpd').value);
+  const cpr  = num($('cpr'), ENC_PER_REV_DEF) || ENC_PER_REV_DEF;
+  lastErr = null;                                    // 只看本次启动的回应
+  sendText('BAMP '  + amp);
+  sendText('BTICK ' + Math.max(1, Math.round(perS * 200 / beats)));
+  sendText('BEAT '  + (beats === 3 ? 2 : 1));
+  const want = (beats === 3) ? 2 : 1;
+  const stepDeg = 2 * amp * 360 / cpr;
+  log(`节拍 ${beats}/4：幅值 ${amp} counts → 每拍目标阶跃 ${2 * amp} counts ≈ ${stepDeg.toFixed(0)}°，` +
+      `每拍 ${(perS / beats).toFixed(2)} s`, stepDeg > 40 ? 'e' : 'k');
+  if (stepDeg > 40)
+    log('⚠ STM32 固件的节拍是方波（目标每拍直接跳变），幅值过大会把摆杆甩倒；建议把幅度降到 40 counts（≈14°）以下', 'e');
+  // 500ms 后核对固件到底进没进节拍：被拒时固件只回 #ERR NOTREADY，beat_mode 仍为 0
+  setTimeout(() => {
+    const ok = (beatMode === want);
+    const why = lastErr === null ? '没有收到 #BEAT 回读，也没有收到 #ERR'
+              : (lastErr === '' ? '固件回了空 #ERR（很可能不认识 BEAT 命令 → 旧固件）'
+                                : '固件回了 ' + lastErr);
+    const shortWhy = lastErr === null ? '固件无回应'
+                   : (lastErr === '' ? '固件不认识该命令（旧固件）' : '固件回 ' + lastErr);
+    if (!ok) {
+      log('⚠ 节拍没有启动：' + why + '。若刚倒过/按过复位，请先「起摆」等到状态 RUN；' +
+          '若提示空 #ERR，说明板子里的固件太旧，需重新编译下载', 'e');
+    }
+    if (onDone) onDone(ok, shortWhy);
+  }, 500);
+}
+
+function exitCurve() {
+  if (!port) { log('未连接串口', 'e'); return; }
+  if (PROTO === 'fpga') { applyFirmwareMode(0); return; }
+  if (beatMode)          sendText('BEAT 0');
+  else if (trajMode === 1) sendText('SINE');
+  else if (trajMode === 2) sendText('TRI');
+  else if (trajMode === 3) sendText('RAMP');
+  else if (velMode === 1)  sendText('VSINE');
+  else if (velMode === 2)  sendText('VTRI');
+  else log('STM32：当前没有运行中的运动模式');
+}
+
+// 3/4 拍：只有 STM32 固件有（FPGA 固件只有 4/4 = 模式 4）
+function setBeat34() {
+  if (!port) { log('未连接串口', 'e'); return; }
+  if (PROTO === 'fpga') { log('FPGA 固件只有 4/4 拍（模式 4），没有 3/4 拍', 'e'); return; }
+  if (beatMode === 2) sendText('BEAT 0');
+  else stmBeatStart(3);
+}
+
+function setWheelMode(on) {
+  if (PROTO !== 'fpga') return;                 // STM32 模式：空按键
+  if (!port) { log('未连接串口', 'e'); return; }
+  if (latest.state !== 2) { log('非平衡态：请先起摆，进入 BALANCE 后再开手轮', 'e'); return; }
+  if (on) {
+    sendParam(A.MOVE_MODE, 5);
+    sendCmd(CMD.ARM);
+    log('手轮模式已请求：MOVE_MODE=5 + CMD=4', 'k');
+  } else {
+    sendCmd(CMD.DISARM);
+    sendParam(A.MOVE_MODE, 0);
+    log('手轮模式已退出（摆臂停在原地）', 'k');
+  }
+}
+
+// ---------------------------------------------------------------- 参数表
+const PARAM_DEFS = [
+  { g:'角度环 PID（S_BALANCE）', c:'#4fc3f7', items:[
+    { a:0x01, n:'BAL_KP',       d:120,  h:'角度环 P（356 PWM/度，饱和±14.5°）' },
+    { a:0x02, n:'BAL_KD',       d:525,  h:'角度环 D（受速度量化限制，不要>800）' },
+  ]},
+  { g:'角度环 · 捕获期软参数（前 550ms）', c:'#ffb74d', items:[
+    { a:0x06, n:'BAL_KP_CATCH', d:102,  h:'捕获期角度 P' },
+    { a:0x07, n:'BAL_KD_CATCH', d:436,  h:'捕获期角度 D' },
+    { a:0x08, n:'POS_KP_CATCH', d:15,   h:'捕获期位置 P' },
+    { a:0x09, n:'POS_KD_CATCH', d:500,  h:'捕获期位置 D' },
+  ]},
+  { g:'位置环 PID（摆臂）', c:'#81c784', items:[
+    { a:0x03, n:'POS_KP',       d:25,   h:'位置环 P' },
+    { a:0x04, n:'POS_KD',       d:450,  h:'位置环 D（已含 ×5 补偿）' },
+    { a:0x05, n:'POS_KI',       d:0,    h:'位置环 I（0 = 关闭）' },
+    { a:0x0D, n:'POS_SLEW_MAX', d:250,  h:'输出斜率限幅 PWM/tick' },
+  ]},
+  { g:'α-β 滤波器', c:'#ba68c8', items:[
+    { a:0x1B, n:'AB_ALPHA',     d:153,  h:'α（Q8，153=0.598）' },
+    { a:0x1C, n:'AB_BETA',      d:65,   h:'β（Q8，65=0.254）取 α²/(2-α)' },
+  ]},
+  { g:'起摆 · 甩杆（SWING_MODE=1）', c:'#e57373', items:[
+    { a:0x11, n:'FLING_STEP',   d:341,  h:'甩杆位移（1040 = 1 圈，可负）' },
+    { a:0x12, n:'FLING_KP',     d:90,   h:'甩杆 P' },
+    { a:0x13, n:'FLING_KD',     d:180,  h:'甩杆 D' },
+    { a:0x14, n:'FLING_BACK',   d:80,   h:'回杆量（0 = 单相）' },
+    { a:0x15, n:'FLING_DECEL',  d:30,   h:'减速段行程（0 = 两相）' },
+    { a:0x16, n:'FLING_WIN',    d:15,   h:'到位判定窗口（计数）' },
+    { a:0x17, n:'FLING_PTICKS', d:60,   h:'单相超时（×5ms）' },
+  ]},
+  { g:'起摆 · 能量泵（SWING_MODE=0 时生效）', c:'#ff8a65', items:[
+    { a:0x0A, n:'SWING_GAIN',   d:1200, h:'泵力幅值' },
+    { a:0x0B, n:'SWING_DAMP',   d:20,   h:'摆臂速度阻尼' },
+    { a:0x0C, n:'SWING_QUARTER',d:267,  h:'90° 对应计数（534/2）' },
+  ]},
+  { g:'零点 / 目标', c:'#90a4ae', items:[
+    { a:0x0E, n:'BAL_TARGET',   d:768,  h:'角度平衡点（ADC 计数）' },
+    { a:0x0F, n:'POS_TARGET',   d:0,    h:'位置目标（仅 BALANCE 生效）' },
+  ]},
+  { g:'麦克风单频检测', c:'#4db6ac', items:[
+    { a:0x18, n:'MIC_FREQ',     d:1000, h:'目标频率（Hz，1~7800）' },
+    { a:0x19, n:'MIC_TH',       d:500,  h:'幅值阈值（满幅≈31000）' },
+    { a:0x1A, n:'MIC_HOLD',     d:20,   h:'保持时间（×5ms）' },
+  ]},
+  { g:'运动模式（0x1F + CMD=4）', c:'#ffd54f', items:[
+    { a:0x1F, n:'MOVE_MODE',    d:0,    h:'0=纯稳摆 1=正弦 2=三角 3=线性 4=四四拍 5=手轮' },
+    { a:0x1D, n:'MOVE_AMP',     d:87,   h:'模式 1~3 曲线幅度（计数）' },
+    { a:0x20, n:'BEAT_AMP',     d:44,   h:'四四拍强拍峰值（独立参数）' },
+    { a:0x1E, n:'MOVE_PERIOD',  d:800,  h:'周期（×5ms），800 = 4 秒' },
+  ]},
+];
+
+const PARAM_FIXED = [
+  ['小增益区',     'ANGLE_DZ=5, SHIFT=0',          'BAL_MODE=1 时强制关闭'],
+  ['D 项低通',     'ANG_D_LPF_SHIFT=0',            '关闭（α-β 已接管）'],
+  ['角度超限保护', 'LIMIT=800, TICKS=20',          '±48°，连续 100ms 确认'],
+  ['PWM 限幅',     'PWM_MAX=5300→EFF 5175',        '位置环限幅 = 2587'],
+  ['编码器突变',   'EFF 40（BAL_MODE）',           '宽限 300ms'],
+  ['起摆超时',     '600 拍 = 3s',                  'SWING_GIVEUP_WIN=500'],
+  ['位置滤波',     'SHIFT=3（1/8）',               'POS_D_SCALE=5 已并入 POS_KD'],
+  ['编码器零点',   '10000',                        '源码固定'],
+];
+
+function hex2(v) { return v.toString(16).toUpperCase().padStart(2, '0'); }
+
+function buildParams() {
+  const box = $('paramList');
+  box.innerHTML = '';
+  for (const g of PARAM_DEFS) {
+    const h4 = document.createElement('h4');
+    h4.textContent = g.g;
+    h4.style.color = g.c;
+    h4.style.borderBottom = `1px solid ${g.c}33`;
+    box.appendChild(h4);
+
+    for (const it of g.items) {
+      const row = document.createElement('div');
+      row.className = 'prow';
+      const nm = document.createElement('span');
+      nm.className = 'pname';
+      nm.textContent = it.n;
+      nm.title = `${it.h}\n串口地址 0x${hex2(it.a)}`;
+      const ad = document.createElement('span');
+      ad.className = 'paddr';
+      ad.textContent = hex2(it.a);
+      const inp = document.createElement('input');
+      inp.type = 'number';
+      inp.value = it.d;
+      inp.dataset.addr = it.a;
+      inp.dataset.def = it.d;
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
+      const btn = document.createElement('button');
+      btn.className = 'sm';
+      btn.textContent = '↓';
+      btn.title = '下发 ' + it.n;
+      btn.addEventListener('click', () => {
+        if (PROTO !== 'fpga') return;          // STM32 模式：空按键
+        const v = Math.round(+inp.value);
+        if (!Number.isFinite(v)) { log(`${it.n} 数值无效`, 'e'); return; }
+        if (sendParam(it.a, v)) log(`${it.n} [0x${hex2(it.a)}] → ${v}`, 'k');
+      });
+      row.append(nm, ad, inp, btn);
+      box.appendChild(row);
+    }
+  }
+
+  const h4 = document.createElement('h4');
+  h4.textContent = '编译期固定（改 top.v 后重新综合）';
+  h4.style.color = '#6e7681';
+  box.appendChild(h4);
+  for (const [k, v, note] of PARAM_FIXED) {
+    const d = document.createElement('div');
+    d.style.cssText = 'font-size:11px;margin-bottom:3px;line-height:1.5';
+    d.innerHTML = `<span style="color:#8b949e;font-family:monospace">${k}</span> ` +
+                  `<span style="color:#c9d1d9;font-family:monospace">${v}</span>` +
+                  `<span style="color:#5a6672;padding-left:8px">${note}</span>`;
+    box.appendChild(d);
+  }
+}
+
+function allInputs() {
+  return Array.from($('paramList').querySelectorAll('input[data-addr]'));
+}
+
+// ---------------------------------------------------------------- 演示数据（按当前协议生成）
+function makeFpgaFrame(o) {
+  const b = new Uint8Array(FRAME_LEN);
+  b[0] = 0xAA; b[1] = 0x55;
+  const put = (off, v) => { b[off] = (v >> 8) & 0xFF; b[off+1] = v & 0xFF; };
+  put(2, o.angle & 0x0FFF);
+  put(4, o.enc1 & 0xFFFF);
+  put(6, o.enc2 & 0xFFFF);
+  put(8, o.pwm & 0xFFFF);
+  b[10] = ((o.wheelSel ? 1 : 0) << 5) | ((o.armed ? 1 : 0) << 4) | (o.state & 0x0F);
+  b[11] = ((o.mode & 0x07) << 4) | ((o.rawAngle >> 8) & 0x0F);
+  b[12] = o.rawAngle & 0xFF;
+  put(13, o.posTgt & 0xFFFF);
+  put(15, o.posPwm & 0xFFFF);
+  put(17, o.micLvl & 0xFFFF);
+  put(19, o.abV & 0xFFFF);
+  for (let k = 0; k < AUD_N; k++) put(21 + k * 2, o.audio[k] & 0xFFFF);
+  let cs = 0;
+  for (let i = 2; i <= 98; i++) cs ^= b[i];
+  b[99] = cs; b[100] = 0x0D; b[101] = 0x0A;
+  return b;
+}
+
+function makeStmFrame(adc, enc, pwm) {
+  const b = new Uint8Array(STM_FRAME);
+  b[0] = STM_HEAD;
+  const d = new DataView(b.buffer);
+  d.setFloat32(1, adc, true);
+  d.setFloat32(5, enc, true);
+  d.setFloat32(9, pwm, true);
+  b[13] = 0x0D;
+  return b;
+}
+
+function toggleDemo() {
+  demo = !demo;
+  if (!demo) {
+    if (demoTimer) { clearInterval(demoTimer); demoTimer = null; }
+    $('btnDemo').classList.remove('on');
+    log('退出演示模式');
+    return;
+  }
+  log('演示模式：生成模拟帧（未接硬件，' + (PROTO === 'fpga' ? 'FPGA 102B' : 'STM32 14B') + '）');
+  $('btnDemo').classList.add('on');
+  let k = 0;
+  const aud = new Int16Array(AUD_N);
+  demoTimer = setInterval(() => {
+    k++;
+    const t = k * 0.02;
+    if (PROTO === 'fpga') {
+      const angDeg = 60 * Math.sin(2 * Math.PI * 0.7 * t);
+      const angle = Math.round(768 + angDeg / 0.337 + 2 * (Math.random() - 0.5));
+      const posCnt = Math.round(240 * Math.sin(2 * Math.PI * 0.12 * t));
+      const pwm = Math.round(3000 * Math.sin(2 * Math.PI * 0.7 * t));
+      const amp = (Math.sin(2 * Math.PI * 0.15 * t) > 0.3) ? 2200 : 120;
+      for (let i = 0; i < AUD_N; i++) {
+        const ta = (k * AUD_N + i) / AUD_FS;
+        aud[i] = Math.round(amp * Math.sin(2 * Math.PI * 150 * ta) + 40 * (Math.random() - 0.5));
+      }
+      feed(makeFpgaFrame({
+        angle, rawAngle: angle + 3,
+        enc1: 10000 + posCnt, enc2: 10000 + Math.round(90 * Math.sin(t)),
+        pwm, state: 2, mode: 0, armed: 0, wheelSel: 0,
+        posTgt: Math.round(240 * Math.sin(2 * Math.PI * 0.12 * (t - 0.4))),
+        posPwm: Math.round(-pwm * 0.3),
+        micLvl: Math.round(300 + 200 * Math.sin(t)),
+        abV: Math.round(3 * Math.cos(2 * Math.PI * 0.7 * t)),
+        audio: aud
+      }));
+    } else {
+      const angDeg = 60 * Math.sin(2 * Math.PI * 0.7 * t);
+      const adc = 3204 + angDeg / 360 * 4160 + 2 * (Math.random() - 0.5);
+      const enc = 10000 + 260 * Math.sin(2 * Math.PI * 0.12 * t);
+      const pwm = 2600 * Math.sin(2 * Math.PI * 0.7 * t) + 300 * Math.sin(2 * Math.PI * 1.1 * t);
+      feed(makeStmFrame(adc, enc, pwm));
+    }
+  }, 20);
+}
+
+// ---------------------------------------------------------------- 标签
+function syncLabels() {
+  const cpr = num($('cpr'), ENC_PER_REV_DEF) || ENC_PER_REV_DEF;
+  const c2d = 360 / cpr;
+  const amp = +$('pAmp').value, perS = +$('pSpd').value;
+  const beats = beatBeats();
+  const isBeat = isBeatMode();
+  $('ampLab').textContent = amp + ' counts  (±' + (amp * c2d).toFixed(1) + '°)' +
+    (isBeat ? '  · 强拍峰值' : '');
+  $('perLab').textContent = isBeat
+    ? `${perS.toFixed(1)} s / ${beats} 拍（每拍 ${(perS / beats).toFixed(2)} s）`
+    : `${perS.toFixed(1)} s`;
+  $('vAmpLab').textContent = $('vAmp').value + ' counts/拍';
+  $('vSpdLab').textContent = (+$('vSpd').value).toFixed(1) + ' s';
+  $('jogLab').textContent = $('jogRate').value + ' °/s';
+  const mAmp = +$('mAmp').value, mPer = +$('mPer').value;
+  $('mAmpLab').textContent = mAmp + ' counts  (±' + (mAmp * c2d).toFixed(1) + '°)  · 强拍峰值';
+  $('mPerLab').textContent = mPer.toFixed(1) + ' s / 4 拍（每拍 ' + (mPer / 4).toFixed(2) + ' s）';
+}
+
+// 当前是否处于节拍模式，以及一轮几拍
+let beatBeatsLast = 4;                        // 最近一次的拍数（退出节拍后仍用得上）
+function isBeatMode() {
+  return PROTO === 'stm32' ? beatMode > 0 : latest.mode === 4;
+}
+function beatBeats() {
+  if (PROTO === 'stm32') return beatMode === 2 ? 3 : (beatMode === 1 ? 4 : beatBeatsLast);
+  return 4;                                   // FPGA 固件只有 4/4
+}
+
+// ---------------------------------------------------------------- 交互绑定
+$('btnConn').addEventListener('click', ev => {
+  if (port) disconnect();
+  else connect(ev.shiftKey);           // Shift + 点击 = 重新选择端口
+});
+
+$('btnStart').addEventListener('click', () => {
+  if (PROTO === 'stm32') { sendText('SWING'); return; }
+  if (latest.state === 0) { if (sendCmd(CMD.START)) log('起摆'); }
+  else { if (sendCmd(CMD.STOP)) log('停止'); }
+});
+
+$('btnReset').addEventListener('click', () => {
+  if (!port) { log('未连接串口', 'e'); return; }
+  if (!confirm('确定要复位吗？\n\n将停止运动并清除运行状态。')) return;
+  if (PROTO === 'stm32') { sendText('RESET'); return; }
+  sendCmd(CMD.RESET);
+  log('软复位已下发');
+});
+
+$('btnGetCal').addEventListener('click', () => { if (PROTO === 'stm32') sendText('GETCAL'); });
+$('btnSine').addEventListener('click', () => setCurve(1));
+$('btnTri').addEventListener('click',  () => setCurve(2));
+$('btnRamp').addEventListener('click', () => setCurve(3));
+$('btnMode0').addEventListener('click', exitCurve);
+$('btnVSine').addEventListener('click',() => { if (PROTO === 'stm32') sendText('VSINE'); });
+$('btnVTri').addEventListener('click', () => { if (PROTO === 'stm32') sendText('VTRI'); });
+$('btnBeat4').addEventListener('click',() => setCurve(4));
+$('btnBeat3').addEventListener('click',() => setBeat34());
+
+// ---- 音乐节律运动：单击 → 5 s 后启动 4/4；连按两下 → 5 s 后启动 3/4 ----
+let musicClickTimer = null, musicCountdown = null;
+function musicReset(hint) {
+  if (musicClickTimer) { clearTimeout(musicClickTimer); musicClickTimer = null; }
+  if (musicCountdown) { clearInterval(musicCountdown); musicCountdown = null; }
+  $('btnMusic').classList.remove('on');
+  $('btnMusic').textContent = '音乐节律运动';
+  $('musicHint').textContent = hint || '按一下 → 5 s 后启动 4/4 拍；连按两下 → 5 s 后启动 3/4 拍';
+}
+function musicLaunch(beat) {                       // beat: 1 = 4/4, 2 = 3/4
+  if (beat === 2 && PROTO === 'fpga') {
+    musicReset('FPGA 固件没有 3/4 拍模式，已取消');
+    log('FPGA 固件只有 4/4 拍（模式 4），没有 3/4 拍', 'e');
+    return;
+  }
+  if (!port) { musicReset('未连接串口'); log('未连接串口', 'e'); return; }
+  // 用音乐节律卡片自己的两个滑条（与位置曲线互不影响）
+  const amp  = Math.round(+$('mAmp').value);
+  const perS = +$('mPer').value;
+  const tag  = (beat === 1) ? '4/4' : '3/4';
+  let left = 5.0;
+  $('btnMusic').classList.add('on');
+  $('btnMusic').textContent = '等待启动…';          // 不显示计时和拍号
+  $('musicHint').textContent = `5 s 后启动 ${tag} 拍（再点一下取消）`;
+  musicCountdown = setInterval(() => {
+    left -= 0.25;
+    if (left > 0.01) return;
+    clearInterval(musicCountdown); musicCountdown = null;
+    $('btnMusic').classList.remove('on');
+    $('btnMusic').textContent = '音乐节律运动';
+    if (PROTO === 'fpga') {
+      $('musicHint').textContent = '已启动 ' + tag + ' 拍';
+      applyFirmwareMode(4, amp, perS);
+    } else {
+      // 由 stmBeatStart 的 500ms 校验决定最终文案
+      $('musicHint').textContent = '正在启动 ' + tag + ' 拍…';
+      stmBeatStart(beat === 1 ? 4 : 3, amp, perS, (ok, why) => {
+        $('musicHint').textContent = ok
+          ? '已启动 ' + tag + ' 拍'
+          : '未启动：' + (why || '固件拒绝') + '（详见日志）';
+      });
+    }
+  }, 250);
+}
+$('btnMusic').addEventListener('click', () => {
+  if (musicCountdown) { musicReset('已取消'); log('已取消音乐节律运动'); return; }
+  if (musicClickTimer) {                           // 第二下 → 3/4
+    clearTimeout(musicClickTimer); musicClickTimer = null;
+    musicLaunch(2);
+    return;
+  }
+  musicClickTimer = setTimeout(() => { musicClickTimer = null; musicLaunch(1); }, 300);
+});
+
+$('wheelSw').addEventListener('click', () => {
+  if (PROTO !== 'fpga') return;                 // STM32：空按键
+  if (!latest.armed || latest.mode !== 5) setWheelMode(true);
+  else setWheelMode(false);
+});
+
+$('btnPause').addEventListener('click', () => {
+  paused = !paused;
+  $('btnPause').textContent = paused ? '继续' : '暂停';
+  log(paused ? '已暂停（仍在接收，不入图）' : '已继续');
+});
+
+$('btnClear').addEventListener('click', () => {
+  resetBuffers();                 // 缓冲/计数/原始字节一起清零，避免残包污染“错”计数
+  log('已清空（波形 / 缓冲 / 计数）');
+});
+
+$('btnCsv').addEventListener('click', () => {
+  if (!samples.length) { log('没有数据', 'e'); return; }
+  const lines = ['t_s,ang_deg,pos_deg,pos_cnt,pwm,mic_dft'];
+  for (const s of samples)
+    lines.push([s.t.toFixed(3), s.ang.toFixed(3), s.pos.toFixed(3),
+                s.posCnt.toFixed(0), s.pwm.toFixed(0), s.mic.toFixed(0)].join(','));
+  const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (PROTO === 'fpga' ? 'fpga_' : 'stm32_') +
+               new Date().toISOString().replace(/[:.]/g,'-') + '.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  log('已导出 ' + samples.length + ' 行');
+});
+
+$('btnDemo').addEventListener('click', toggleDemo);
+$('btnRaw').addEventListener('click', dumpRaw);
+
+$('btnFull').addEventListener('click', async () => {
+  try {
+    if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
+    else await document.exitFullscreen();
+  } catch (e) { log('全屏切换失败：' + e.message, 'e'); }
+});
+document.addEventListener('fullscreenchange', () => {
+  $('btnFull').textContent = document.fullscreenElement ? '退出全屏' : '全屏';
+});
+
+$('ctrlSw').addEventListener('click', () => {
+  ctrlMode = ctrlMode ? 0 : 1;
+  $('ctrlSw').classList.toggle('on', ctrlMode === 1);
+  $('ctrlPid').classList.toggle('on', ctrlMode === 0);
+  $('ctrlLqr').classList.toggle('on', ctrlMode === 1);
+  log('控制律显示：' + (ctrlMode ? 'LQR' : 'PID') + '（仅上位机界面）');
+});
+
+$('btnSetPos').addEventListener('click', () => {
+  const v = +$('posTgt').value;
+  if (!Number.isFinite(v)) { log('目标无效', 'e'); return; }
+  sendCounts(v);
+});
+$('posTgt').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnSetPos').click(); });
+$('btnInc30').addEventListener('click', () => bumpDeg(+30));
+$('btnDec30').addEventListener('click', () => bumpDeg(-30));
+$('btnZero').addEventListener('click', () => {
+  // 显示 0°：STM32 的 POS 是绝对值，故为编码器零点
+  sendCounts(PROTO === 'stm32' ? num($('encZero'), 10000) : 0);
+});
+$('btnNow').addEventListener('click', () => {
+  // 跟随当前实际位置
+  sendCounts(PROTO === 'stm32' ? Math.round(latest.enc1) : currentPosCnt());
+});
+
+$('btnAllSend').addEventListener('click', () => {
+  if (PROTO !== 'fpga') return;                 // STM32：空按键
+  const list = allInputs();
+  if (!port || !writer) { log('未连接串口', 'e'); return; }
+  let n = 0;
+  for (const inp of list) {
+    const v = Math.round(+inp.value);
+    if (!Number.isFinite(v)) continue;
+    if (sendParam(+inp.dataset.addr, v)) n++;
+  }
+  log(`已下发 ${n}/${list.length} 个参数`, 'k');
+});
+$('btnAllDefault').addEventListener('click', () => {
+  for (const inp of allInputs()) inp.value = inp.dataset.def;
+  log('已恢复为面板默认值（未下发）');
+});
+
+// ---- 滑块：幅度 / 周期（两协议共用，节拍运动也用这两个）----
+let ampTimer = null, perTimer = null, vampTimer = null, vspdTimer = null;
+
+function onAmp() {
+  syncLabels();
+  if (!port) return;
+  const v = Math.round(+$('pAmp').value);
+  clearTimeout(ampTimer);
+  ampTimer = setTimeout(() => {
+    if (PROTO === 'fpga') {
+      if (latest.mode >= 1 && latest.mode <= 4 && latest.armed === 1) {
+        sendParam(A.MOVE_AMP, v);
+        sendParam(A.BEAT_AMP, v);
+      }
+    } else {
+      sendText((beatMode ? 'BAMP ' : 'AMP ') + v);
+    }
+  }, 200);
+}
+
+function onPer() {
+  syncLabels();
+  if (!port) return;
+  const s = +$('pSpd').value;                        // 秒
+  clearTimeout(perTimer);
+  perTimer = setTimeout(() => {
+    if (PROTO === 'fpga') {
+      if (latest.mode >= 1 && latest.mode <= 4 && latest.armed === 1)
+        sendParam(A.MOVE_PERIOD, Math.max(100, Math.round(s * 200)));
+    } else if (beatMode) {
+      // 固件 BTICK = 【每拍】tick 数（×5ms）；滑条是【整轮】周期，所以除以拍数
+      sendText('BTICK ' + Math.max(1, Math.round(s * 200 / beatBeats())));
+    } else {
+      sendText((velMode ? 'VSPD ' : 'SPD ') + Math.round(65536 / (s * 200)));
+    }
+  }, 200);
+}
+
+function onVSlider() {
+  syncLabels();
+  if (PROTO !== 'stm32') return;
+  clearTimeout(vampTimer);
+  vampTimer = setTimeout(() => sendText('VAMP ' + Math.round(+$('vAmp').value)), 200);
+}
+function onVPeriod() {
+  syncLabels();
+  if (PROTO !== 'stm32') return;
+  clearTimeout(vspdTimer);
+  vspdTimer = setTimeout(() => sendText('VSPD ' + Math.round(65536 / ((+$('vSpd').value) * 200))), 200);
+}
+
+$('pAmp').addEventListener('input', onAmp);
+$('pSpd').addEventListener('input', onPer);
+$('vAmp').addEventListener('input', onVSlider);
+$('vSpd').addEventListener('input', onVPeriod);
+$('mAmp').addEventListener('input', syncLabels);
+$('mPer').addEventListener('input', syncLabels);
+
+// ---- 显示方向 / 设置 ----
+$('chkInvArm').checked  = (signState.arm  === -1);
+$('chkInvPend').checked = (signState.pend === -1);
+$('chkInvArm').addEventListener('change', e => {
+  signState.arm = e.target.checked ? -1 : 1; applySignState();
+  log('摆臂显示方向：' + (e.target.checked ? '反向' : '正向'));
+});
+$('chkInvPend').addEventListener('change', e => {
+  signState.pend = e.target.checked ? -1 : 1; applySignState();
+  log('摆杆显示方向：' + (e.target.checked ? '反向' : '正向'));
+});
+
+SET_KEYS.forEach(k => { if ($(k)) $(k).addEventListener('change', saveProtoSettings); });
+$('jogRate').addEventListener('input', syncLabels);
+$('encUnit').addEventListener('change', () => { for (const e in rangeCache) delete rangeCache[e]; });
+$('span').addEventListener('change', () => { for (const e in rangeCache) delete rangeCache[e]; });
+
+// ---- 底部协议拨码 ----
+$('protoSw').addEventListener('click', () => {
+  setProto(PROTO === 'fpga' ? 'stm32' : 'fpga');
+});
+
+// ---------------------------------------------------------------- 主循环
+let lastReadout = 0;
+let lastWatchdog = 0;
+function loop(ts) {
+  drawSeries($('cvAng'), 'ang', '#22d3ee', '倾角 (°)', 4);
+  if ($('encUnit').value === 'cnt')
+    drawSeries($('cvEnc'), 'posCnt', '#f59e0b', '编码器 counts', 40);
+  else
+    drawSeries($('cvEnc'), 'pos', '#f59e0b', '摆臂 (°)', 10);
+  drawSeries($('cvPwm'), 'pwm', '#a78bfa', 'PWM (±' + pwmFull() + ')', 200);
+  drawMic();
+  drawModel();
+  if (ts - lastReadout > 50) { updateReadouts(); lastReadout = ts; }
+  if (ts - lastWatchdog > 500) { lastWatchdog = ts; checkNoFrame(); }
+  requestAnimationFrame(loop);
+}
+
+// ---------------------------------------------------------------- 启动
+buildParams();
+syncLabels();
+try { setProto(localStorage.getItem(PKEY) || 'fpga', true); } catch (_) { setProto('fpga', true); }
+log('并集上位机：底部拨码切换协议（STM32 / FPGA），未定义的功能为空格键');
+log('STM32：$ + 3×float32(LE) + 0D（14B，128000）／文本命令 SWING/POS/AMP…');
+log('FPGA ：AA 55 + … 102B（含 39 点音频，115200）／参数帧 9B');
+if (!('serial' in navigator))
+  log('提示：此浏览器无 Web Serial，请用 Chrome/Edge 并通过 http://localhost 打开', 'e');
+requestAnimationFrame(loop);
+window.addEventListener('beforeunload', () => { if (port) disconnect(); });
+</script>
+</body>
+</html>

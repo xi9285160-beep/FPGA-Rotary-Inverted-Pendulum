@@ -1,0 +1,1692 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FPGA 旋转倒立摆 · 串口波形与调参</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --border:#30363d;
+    --text:#c9d1d9; --dim:#8b949e;
+    --c0:#4fc3f7; --c1:#81c784; --c2:#ffb74d; --c3:#ba68c8;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--bg); color:var(--text);
+    font:13px/1.5 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  header{
+    background:var(--panel); border-bottom:1px solid var(--border);
+    padding:8px 12px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+    flex-shrink:0;
+  }
+  .grp{display:flex; gap:6px; align-items:center}
+  .grp>label{color:var(--dim); white-space:nowrap}
+  button{
+    background:#21262d; color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:5px 12px; cursor:pointer; font:inherit;
+  }
+  button:hover:not(:disabled){background:#30363d; border-color:#484f58}
+  button:disabled{opacity:.45; cursor:not-allowed}
+  button.primary{background:#1f6feb; border-color:#1f6feb; color:#fff}
+  button.primary:hover:not(:disabled){background:#388bfd}
+  button.danger{background:#b62324; border-color:#b62324; color:#fff}
+  button.danger:hover:not(:disabled){background:#da3633}
+  button.sm{padding:2px 8px; font-size:12px}
+  select,input{
+    background:#0d1117; color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:5px 8px; font:inherit;
+  }
+  input[type=number]{width:78px}
+  #status{
+    margin-left:auto; display:flex; gap:14px; align-items:center;
+    color:var(--dim); font-variant-numeric:tabular-nums; white-space:nowrap;
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:#484f58;display:inline-block}
+  .dot.on{background:#3fb950; box-shadow:0 0 6px #3fb950}
+
+  main{flex:1; display:flex; min-height:0}
+
+  #charts{flex:1; display:flex; flex-direction:column; gap:6px; padding:8px; min-width:0}
+  .chart{
+    flex:1; min-height:0; position:relative;
+    background:#11161d; border:1px solid var(--border); border-radius:8px;
+    overflow:hidden;
+  }
+  .chart canvas{display:block; width:100%; height:100%}
+  .chart .hdr{
+    position:absolute; top:5px; left:10px; right:10px;
+    display:flex; gap:12px; align-items:baseline;
+    pointer-events:none; font-variant-numeric:tabular-nums;
+  }
+  .chart .hdr .nm{font-weight:600; font-size:12px}
+  .chart .hdr .val{font-size:15px}
+  .chart .hdr .sub{color:var(--dim); font-size:11px}
+  .chart.off{opacity:.3}
+
+  #params{
+    width:330px; flex-shrink:0; background:var(--panel);
+    border-left:1px solid var(--border);
+    display:flex; flex-direction:column; min-height:0;
+  }
+  #params .ph{
+    padding:8px 12px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; gap:8px; flex-shrink:0;
+  }
+  #params .ph b{font-size:13px}
+  #params .ph .sp{margin-left:auto; display:flex; gap:6px}
+  #plist{overflow-y:auto; flex:1; padding:6px 0}
+  .prow{
+    display:grid; grid-template-columns:96px 1fr 56px;
+    gap:6px; align-items:center; padding:3px 12px;
+  }
+  .prow:hover{background:#1c2128}
+  .prow .k{color:var(--dim); font-size:10px; font-family:ui-monospace,Consolas,monospace}
+  .prow input[type=range]{width:100%; accent-color:#1f6feb; height:16px}
+  .prow input[type=number]{width:100%; padding:2px 4px; font-size:12px; text-align:right}
+  .pgroup{
+    padding:8px 12px 3px; color:#6e7681; font-size:11px;
+    letter-spacing:.5px; border-top:1px solid #21262d;
+    margin-top:4px;
+  }
+  .pgroup:first-child{border-top:none; margin-top:0}
+  .dirty{color:#d29922 !important}
+
+  #log{
+    color:var(--dim); font-size:11px; padding:0 12px 5px;
+    max-height:40px; overflow:auto; white-space:pre-wrap; flex-shrink:0;
+  }
+  #log .e{color:#f85149}
+  #log .ok{color:#3fb950}
+
+  /* ---------- 仿真视图 ---------- */
+  #simwrap{
+    flex-shrink:0; height:290px; position:relative;
+    border-bottom:1px solid var(--border); background:#0b1017;
+  }
+  #sim{display:block; width:100%; height:100%}
+  #simwrap .tag{
+    position:absolute; top:6px; font-size:10px; color:#6e7681;
+    letter-spacing:.5px; pointer-events:none;
+  }
+  #simwrap .tag.l{left:8px}
+  #simwrap .tag.r{right:8px}
+  #simwrap .rd{
+    position:absolute; bottom:5px; left:8px; right:8px;
+    display:flex; gap:10px; font-size:10px; color:var(--dim);
+    font-variant-numeric:tabular-nums; pointer-events:none;
+  }
+  #simwrap .rd b{color:var(--text); font-weight:600}
+
+  /* ---------- 模式切换 ---------- */
+  #modebar{
+    display:flex; gap:0; flex-shrink:0;
+    border-bottom:1px solid var(--border); background:#11161d;
+  }
+  #modebar .mb{
+    flex:1; border:none; border-radius:0; background:transparent;
+    color:var(--dim); padding:7px 0; font-size:12px; cursor:pointer;
+    border-bottom:2px solid transparent;
+  }
+  #modebar .mb:hover{background:#161d26; color:var(--text)}
+  #modebar .mb.on{color:#58a6ff; border-bottom-color:#58a6ff; background:#0d1620}
+
+  /* ---------- 模型面板 ---------- */
+  #modelpanel{flex-shrink:0; display:flex; flex-direction:column; max-height:42%; min-height:0}
+  #mlist{overflow-y:auto; flex:1; min-height:0; padding:4px 0}
+  #vinfo{
+    padding:4px 12px 8px; font-size:10px; color:var(--dim);
+    font-variant-numeric:tabular-nums; line-height:1.6; flex-shrink:0;
+    white-space:pre-wrap;
+  }
+  #vinfo b{color:var(--text)}
+  #vinfo .g{color:#3fb950}
+  #vinfo .y{color:#d29922}
+  #vinfo .r{color:#f85149}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="grp">
+    <button id="btnConn" class="primary">连接串口</button>
+    <button id="btnPause" disabled>暂停</button>
+    <button id="btnClear" disabled>清空</button>
+    <button id="btnCsv" disabled>导出 CSV</button>
+  </div>
+
+  <div class="grp">
+    <label>波特率</label>
+    <select id="baud">
+      <option>9600</option>
+      <option>19200</option>
+      <option>38400</option>
+      <option>57600</option>
+      <option selected>115200</option>
+      <option>230400</option>
+    </select>
+  </div>
+
+  <div class="grp">
+    <label>角度零点</label><input id="angleZero" type="number" value="3000" step="1">
+    <label>编码器零点</label><input id="encZero" type="number" value="10000" step="1">
+  </div>
+
+  <div class="grp">
+    <label>时间窗</label>
+    <select id="span">
+      <option value="5">5 s</option>
+      <option value="10" selected>10 s</option>
+      <option value="20">20 s</option>
+      <option value="30">30 s</option>
+      <option value="60">60 s</option>
+    </select>
+  </div>
+
+  <div class="grp">
+    <label><input type="checkbox" id="chk0" checked> 角度</label>
+    <label><input type="checkbox" id="chk1" checked> enc1</label>
+    <label><input type="checkbox" id="chk2" checked> enc2</label>
+    <label><input type="checkbox" id="chk3" checked> PWM</label>
+  </div>
+
+  <div id="status">
+    <span><span id="dot" class="dot"></span> <span id="stTxt">未连接</span></span>
+    <span>状态 <b id="stState">–</b></span>
+    <span>帧 <b id="stFrame">0</b></span>
+    <span><b id="stRate">0.0</b> Hz</span>
+    <span>错 <b id="stErr">0</b></span>
+    <span>校验 <b id="stChk">0</b></span>
+    <span>尖峰 <b id="stSpike">0</b></span>
+  </div>
+</header>
+
+<main>
+  <div id="charts">
+    <div class="chart" id="wrap0"><canvas id="cv0"></canvas>
+      <div class="hdr"><span class="nm" style="color:var(--c0)">角度 ang_err</span>
+        <span class="val" id="v0">–</span><span class="sub" id="s0"></span></div></div>
+    <div class="chart" id="wrap1"><canvas id="cv1"></canvas>
+      <div class="hdr"><span class="nm" style="color:var(--c1)">编码器 1 (XH1)</span>
+        <span class="val" id="v1">–</span><span class="sub" id="s1"></span></div></div>
+    <div class="chart" id="wrap2"><canvas id="cv2"></canvas>
+      <div class="hdr"><span class="nm" style="color:var(--c2)">编码器 2 (XH2)</span>
+        <span class="val" id="v2">–</span><span class="sub" id="s2"></span></div></div>
+    <div class="chart" id="wrap3"><canvas id="cv3"></canvas>
+      <div class="hdr"><span class="nm" style="color:var(--c3)">PWM 输出</span>
+        <span class="val" id="v3">–</span><span class="sub" id="s3"></span></div></div>
+  </div>
+
+  <aside id="params">
+    <div id="simwrap">
+      <canvas id="sim"></canvas>
+      <div class="tag l" id="tagL">俯视 · 摆臂旋转</div>
+      <div class="tag r" id="tagR">侧视 · 摆杆倾角</div>
+      <div class="rd">
+        <span>臂 <b id="rdArm">–</b></span>
+        <span>杆 <b id="rdPend">–</b></span>
+        <span>角速度 <b id="rdVel">–</b></span>
+      </div>
+    </div>
+
+    <!-- 模式切换 -->
+    <div id="modebar">
+      <button class="mb on" data-mode="real">实时数据</button>
+      <button class="mb" data-mode="virtual">虚拟仿真</button>
+    </div>
+
+    <!-- 系统模型面板（仅虚拟模式显示） -->
+    <div id="modelpanel" style="display:none">
+      <div class="ph">
+        <b>系统模型</b>
+        <span class="sp">
+          <button class="sm" id="btnIdent" title="从已录制的实测数据估计模型参数">辨识</button>
+          <button class="sm" id="btnValid" title="用录制的 PWM 驱动模型，对比预测角度与实测角度">验证</button>
+        </span>
+      </div>
+      <div id="mlist"></div>
+      <div class="ph">
+        <b>虚拟运行</b>
+        <span class="sp">
+          <button class="sm" id="btnVRun">开始</button>
+          <button class="sm" id="btnVReset">复位</button>
+          <button class="sm" id="btnVPush" disabled title="把当前 PID 下发到设备">下发PID</button>
+        </span>
+      </div>
+      <div id="vinfo"></div>
+    </div>
+
+    <div class="ph">
+      <b>平衡参数</b>
+      <span class="sp">
+        <button class="sm" id="btnReset" disabled title="把面板恢复为上电默认值并下发">恢复默认</button>
+        <button class="sm" id="btnPush" disabled title="把面板全部参数下发到设备">全部下发</button>
+      </span>
+    </div>
+    <div id="plist"></div>
+  </aside>
+</main>
+
+<div id="log"></div>
+
+<script>
+"use strict";
+
+// ============================================================================
+// 上报帧（设备 -> PC），16 字节，115200 8N1，每 20ms 一帧：
+//   0xAA 0x55 | angle(2B) | enc1(2B) | enc2(2B) | pwm(2B,signed) | state(1B)
+//             | rawAngle(2B, 低12位有效) | chk(1B) | 0x0D 0x0A
+//   angle : 控制器实际采信的角度（平衡时已做尖峰抑制）
+//   raw   : 原始 ADC 值（含尖峰），仅用于诊断
+//   chk   = 字节 2~12 的异或和
+//
+// 下发帧（PC -> 设备），9 字节：
+//   0xAA 0x55 0x01 | addr(1B) | data_H | data_L | chk | 0x0D 0x0A
+//   chk = 0x01 ^ addr ^ data_H ^ data_L
+// ============================================================================
+const FRAME_LEN  = 16;
+const NOMINAL_HZ = 50;
+
+// ---------------------------------------------------------------- 参数表
+// 地址必须与 pendulum_ctrl.v 的 RP_* 定义一致。
+// min/max/step 只用于滑块，输入框可填超出范围的值。
+const PARAMS = [
+  { g:'角度环 (PD)',             addr:0x01, key:'BAL_KP',         val:35,  min:0, max:200,  step:1  },
+  { g:'',                        addr:0x02, key:'BAL_KD',         val:180, min:0, max:600,  step:1  },
+
+  { g:'位置环 (PID)',            addr:0x03, key:'POS_KP',         val:25,  min:0, max:200,  step:1  },
+  { g:'',                        addr:0x04, key:'POS_KD',         val:600, min:0, max:3000, step:10 },
+  { g:'',                        addr:0x05, key:'POS_KI',         val:0,   min:0, max:200,  step:1  },
+
+  { g:'捕获期软参数',            addr:0x06, key:'BAL_KP_CATCH',   val:30,  min:0, max:200,  step:1  },
+  { g:'',                        addr:0x07, key:'BAL_KD_CATCH',   val:150, min:0, max:600,  step:1  },
+  { g:'',                        addr:0x08, key:'POS_KP_CATCH',   val:15,  min:0, max:200,  step:1  },
+  { g:'',                        addr:0x09, key:'POS_KD_CATCH',   val:500, min:0, max:3000, step:10 },
+
+  { g:'起摆能量泵',              addr:0x0A, key:'SWING_GAIN',     val:1200, min:0, max:5175, step:50 },
+  { g:'',                        addr:0x0B, key:'SWING_DAMP',     val:20,   min:0, max:200,  step:1  },
+  { g:'',                        addr:0x0C, key:'SWING_QUARTER',  val:1000, min:500, max:1500, step:10 },
+
+  { g:'位置环输出限幅',          addr:0x0D, key:'POS_SLEW_MAX',   val:250,  min:0, max:2000, step:10 },
+
+  { g:'平衡目标位置',            addr:0x0E, key:'BAL_TARGET',     val:3000, min:2000, max:4000, step:1 },
+];
+const DEFAULTS = Object.fromEntries(PARAMS.map(p => [p.addr, p.val]));
+
+// ---------------------------------------------------------------- 数据缓冲
+const MAX_POINTS = 4000;
+const ch = [
+  { el:'cv0', wrap:'wrap0', v:'v0', s:'s0', color:'#4fc3f7', data:[], sum:0, n:0, min:0, max:0 },
+  { el:'cv1', wrap:'wrap1', v:'v1', s:'s1', color:'#81c784', data:[], sum:0, n:0, min:0, max:0 },
+  { el:'cv2', wrap:'wrap2', v:'v2', s:'s2', color:'#ffb74d', data:[], sum:0, n:0, min:0, max:0 },
+  { el:'cv3', wrap:'wrap3', v:'v3', s:'s3', color:'#ba68c8', data:[], sum:0, n:0, min:0, max:0 },
+];
+const enabled = [true, true, true, true];
+
+let frameCount = 0, errCount = 0, chkFail = 0;
+let paused = false;
+let lastFrameTime = 0, rateEma = 0;
+let lastState = -1;
+const rawSpike = [];
+let spikeCount = 0;
+
+// ---------------------------------------------------------------- 串口
+let port = null, reader = null, keepReading = false, writer = null;
+let rxBuf = new Uint8Array(0);
+
+const $ = id => document.getElementById(id);
+const logEl = $('log');
+function log(msg, cls) {
+  const t = new Date().toLocaleTimeString('zh-CN', {hour12:false});
+  const line = document.createElement('div');
+  if (cls) line.className = cls;
+  line.textContent = `[${t}] ${msg}`;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+  while (logEl.childElementCount > 40) logEl.removeChild(logEl.firstChild);
+}
+
+// ---------------------------------------------------------------- 参数面板
+const pInputs = {};
+
+function buildParamPanel() {
+  const box = $('plist');
+  box.innerHTML = '';
+  for (const p of PARAMS) {
+    if (p.g) {
+      const g = document.createElement('div');
+      g.className = 'pgroup';
+      g.textContent = p.g;
+      box.appendChild(g);
+    }
+    const row = document.createElement('div');
+    row.className = 'prow';
+
+    const k = document.createElement('span');
+    k.className = 'k';
+    k.textContent = p.key;
+
+    const rg = document.createElement('input');
+    rg.type = 'range';
+    rg.min = p.min; rg.max = p.max; rg.step = p.step;
+    rg.value = p.val;
+
+    const nm = document.createElement('input');
+    nm.type = 'number';
+    nm.value = p.val;
+    nm.step = p.step;
+
+    rg.addEventListener('input', () => {
+      nm.value = rg.value;
+      nm.classList.toggle('dirty', +nm.value !== DEFAULTS[p.addr]);
+      sendParam(p.addr, +rg.value);
+    });
+    nm.addEventListener('change', () => {
+      const v = Math.round(+nm.value);
+      if (!isFinite(v)) { nm.value = DEFAULTS[p.addr]; return; }
+      rg.value = v;
+      nm.classList.toggle('dirty', v !== DEFAULTS[p.addr]);
+      sendParam(p.addr, v);
+    });
+
+    row.append(k, rg, nm);
+    box.appendChild(row);
+    pInputs[p.addr] = { range: rg, num: nm };
+  }
+}
+
+function sendParam(addr, value) {
+  if (!port || !writer) { log('未连接，参数未下发', 'e'); return; }
+  const v = ((Math.round(value) % 65536) + 65536) % 65536;
+  const dh = (v >> 8) & 0xFF, dl = v & 0xFF;
+  const chk = 0x01 ^ (addr & 0xFF) ^ dh ^ dl;
+  const buf = new Uint8Array([0xAA, 0x55, 0x01, addr & 0xFF, dh, dl, chk, 0x0D, 0x0A]);
+  writer.write(buf).catch(e => log('写入失败：' + e.message, 'e'));
+}
+
+// ---------------------------------------------------------------- 帧解析
+function findHeader(b) {
+  for (let i = 0; i + 1 < b.length; i++) {
+    if (b[i] === 0xAA && b[i+1] === 0x55) return i;
+  }
+  return -1;
+}
+
+function feed(bytes) {
+  const merged = new Uint8Array(rxBuf.length + bytes.length);
+  merged.set(rxBuf, 0);
+  merged.set(bytes, rxBuf.length);
+  rxBuf = merged;
+
+  while (rxBuf.length >= FRAME_LEN) {
+    const h = findHeader(rxBuf);
+    if (h < 0) { rxBuf = rxBuf.slice(Math.max(0, rxBuf.length - 1)); break; }
+    if (h > 0) { rxBuf = rxBuf.slice(h); if (rxBuf.length < FRAME_LEN) break; }
+
+    if (rxBuf[14] !== 0x0D || rxBuf[15] !== 0x0A) {
+      errCount++; rxBuf = rxBuf.slice(1); continue;
+    }
+
+    let cs = 0;
+    for (let i = 2; i <= 12; i++) cs ^= rxBuf[i];
+    if (cs !== rxBuf[13]) { chkFail++; rxBuf = rxBuf.slice(1); continue; }
+
+    const angle = (rxBuf[2] << 8) | rxBuf[3];
+    const enc1  = (rxBuf[4] << 8) | rxBuf[5];
+    const enc2  = (rxBuf[6] << 8) | rxBuf[7];
+    const pwmU  = (rxBuf[8] << 8) | rxBuf[9];
+    const pwm   = pwmU >= 0x8000 ? pwmU - 0x10000 : pwmU;
+    const state = rxBuf[10] & 0x0F;
+    const rawA  = ((rxBuf[11] & 0x0F) << 8) | rxBuf[12];
+    rxBuf = rxBuf.slice(FRAME_LEN);
+    pushSample(angle, enc1, enc2, pwm, state, rawA);
+  }
+
+  if (rxBuf.length > 4096) rxBuf = rxBuf.slice(-64);
+}
+
+function pushSample(angle, enc1, enc2, pwm, state, rawA) {
+  frameCount++;
+
+  const az = +$('angleZero').value || 0;
+  const ez = +$('encZero').value || 0;
+  const vals = [angle - az, enc1 - ez, enc2 - ez, pwm];
+  const raws = [angle, enc1, enc2, pwm];
+
+  // 尖峰诊断：raw 与控制器采信值的偏差
+  if (rawA !== undefined) {
+    rawSpike.push(Math.abs(rawA - angle));
+    if (rawSpike.length > MAX_POINTS) rawSpike.splice(0, rawSpike.length - MAX_POINTS);
+    if (Math.abs(rawA - angle) > 120) spikeCount++;
+  }
+
+  for (let i = 0; i < 4; i++) {
+    const c = ch[i];
+    if (!paused) {
+      c.data.push(vals[i]);
+      if (c.data.length > MAX_POINTS) c.data.splice(0, c.data.length - MAX_POINTS);
+    }
+    c.sum += vals[i]; c.n++;
+    if (c.n === 1) { c.min = c.max = vals[i]; }
+    else { if (vals[i] < c.min) c.min = vals[i]; if (vals[i] > c.max) c.max = vals[i]; }
+    c.lastRaw = raws[i];
+  }
+
+  if (state !== lastState) {
+    const names = ['IDLE', 'SWING', 'BALANCE'];
+    log(`状态 → ${names[state] ?? ('0x' + state.toString(16))}`,
+        state === 2 ? 'ok' : undefined);
+    lastState = state;
+    $('stState').textContent = names[state] ?? ('0x' + state.toString(16));
+    $('stState').style.color =
+      state === 2 ? '#3fb950' : state === 1 ? '#d29922' : '#8b949e';
+  }
+
+  const now = performance.now();
+  if (lastFrameTime) {
+    const dt = now - lastFrameTime;
+    if (dt > 0 && dt < 500) {
+      const inst = 1000 / dt;
+      rateEma = rateEma ? rateEma * 0.9 + inst * 0.1 : inst;
+    }
+  }
+  lastFrameTime = now;
+}
+
+// ---------------------------------------------------------------- 绘图
+function drawChart(i) {
+  const c = ch[i];
+  const cv = $(c.el);
+  const wrap = $(c.wrap);
+  wrap.classList.toggle('off', !enabled[i]);
+
+  const dpr = window.devicePixelRatio || 1;
+  const rect = cv.getBoundingClientRect();
+  const w = Math.max(1, Math.floor(rect.width));
+  const h = Math.max(1, Math.floor(rect.height));
+  if (cv.width !== Math.round(w*dpr) || cv.height !== Math.round(h*dpr)) {
+    cv.width = Math.round(w*dpr);
+    cv.height = Math.round(h*dpr);
+  }
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+  g.fillStyle = '#11161d';
+  g.fillRect(0, 0, w, h);
+
+  const padL = 54, padR = 8, padT = 24, padB = 6;
+  const pw = w - padL - padR;
+  const ph = h - padT - padB;
+  if (pw <= 4 || ph <= 4) return;
+
+  const spanSec = +$('span').value || 10;
+  const maxShow = Math.max(2, Math.round(spanSec * NOMINAL_HZ));
+  const data = c.data.length > maxShow ? c.data.slice(c.data.length - maxShow) : c.data;
+
+  let lo = 0, hi = 0;
+  if (data.length) {
+    lo = Infinity; hi = -Infinity;
+    for (const v of data) { if (v < lo) lo = v; if (v > hi) hi = v; }
+    if (!isFinite(lo)) { lo = 0; hi = 0; }
+  }
+  lo = Math.min(lo, 0); hi = Math.max(hi, 0);
+  if (hi - lo < 8) { const mid = (hi + lo) / 2; lo = mid - 4; hi = mid + 4; }
+  const padY = (hi - lo) * 0.12;
+  lo -= padY; hi += padY;
+
+  const y2p = v => padT + ph * (1 - (v - lo) / (hi - lo));
+  const x2p = k => padL + (data.length <= 1 ? 0 : pw * k / (data.length - 1));
+
+  g.strokeStyle = '#1f2630';
+  g.lineWidth = 1;
+  g.beginPath();
+  for (let k = 0; k <= 3; k++) {
+    const y = Math.round(padT + ph * k / 3) + 0.5;
+    g.moveTo(padL, y); g.lineTo(padL + pw, y);
+  }
+  for (let k = 0; k <= 10; k++) {
+    const x = Math.round(padL + pw * k / 10) + 0.5;
+    g.moveTo(x, padT); g.lineTo(x, padT + ph);
+  }
+  g.stroke();
+
+  g.fillStyle = '#6e7681';
+  g.font = '10px ui-monospace,Consolas,monospace';
+  g.textAlign = 'right';
+  g.textBaseline = 'middle';
+  for (let k = 0; k <= 3; k++) {
+    const v = hi - (hi - lo) * k / 3;
+    g.fillText(Math.round(v).toString(), padL - 5, padT + ph * k / 3);
+  }
+
+  if (lo <= 0 && hi >= 0) {
+    g.strokeStyle = '#3d444d';
+    g.setLineDash([4, 4]);
+    g.beginPath();
+    const y0 = Math.round(y2p(0)) + 0.5;
+    g.moveTo(padL, y0); g.lineTo(padL + pw, y0);
+    g.stroke();
+    g.setLineDash([]);
+  }
+
+  if (data.length > 1) {
+    g.strokeStyle = c.color;
+    g.lineWidth = 1.4;
+    g.lineJoin = 'round';
+    g.beginPath();
+
+    const perPx = data.length / pw;
+    if (perPx > 2) {
+      for (let px = 0; px < pw; px++) {
+        const i0 = Math.floor(px * perPx);
+        const i1 = Math.min(data.length, Math.floor((px + 1) * perPx));
+        if (i1 <= i0) continue;
+        let mn = Infinity, mx = -Infinity;
+        for (let k = i0; k < i1; k++) {
+          const v = data[k];
+          if (v < mn) mn = v;
+          if (v > mx) mx = v;
+        }
+        const x = padL + px + 0.5;
+        g.moveTo(x, y2p(mn));
+        g.lineTo(x, y2p(mx));
+      }
+    } else {
+      for (let k = 0; k < data.length; k++) {
+        const x = x2p(k), y = y2p(data[k]);
+        if (k === 0) g.moveTo(x, y); else g.lineTo(x, y);
+      }
+    }
+    g.stroke();
+  }
+
+  const last = data.length ? data[data.length - 1] : null;
+  $(c.v).textContent = last === null ? '–' : last.toString();
+  const avg = c.n ? (c.sum / c.n) : 0;
+  $(c.s).textContent = `raw ${c.lastRaw ?? '–'}  min ${c.min}  max ${c.max}  avg ${avg.toFixed(1)}`;
+}
+
+// ============================================================================
+// 系统建模与虚拟仿真
+// ============================================================================
+// 采用【离散 ARX 模型】（自回归 + 外生输入），在 20ms 遥测采样下：
+//
+//   摆杆：θ[k+1] = a1·θ[k] + a2·θ[k-1] + b1·u[k] + b2·u[k-1]
+//   摆臂：α[k+1] = c1·α[k] + c2·α[k-1] + d1·u[k] + d2·u[k-1]
+//
+// 【为什么用 ARX 而不是连续物理模型】
+//   连续模型 θ̈ = ω²θ − 2ζωθ̇ + b·u 从闭环数据辨识时非常困难：
+//     · 数值微分求 θ̈ 会把量化噪声放大 1/T² = 2500 倍
+//     · 用实测 u 做开环仿真会因不稳定极点指数发散，残差永远巨大
+//     · 参数存在等价性，优化会跑到边界（实测 ω→1、ζ→0.5 全是错解）
+//   ARX 模型是【参数线性】的：
+//     · 用最小二乘直接求解析解，不需要迭代优化、不会发散
+//     · 只用原始 θ 和 u，完全不做微分 → 对噪声免疫
+//     · 拟合质量由 R² 客观给出，可验证
+//   这是系统辨识教材里的标准方法（Ljung《System Identification》）。
+//
+// 【适用范围】模型在【录制数据所用的 PID 附近】最准。
+//   改 PID 后仿真仍有参考价值，但极端增益下会有偏差。
+// ============================================================================
+
+const MODEL = [
+  { k:'a1', label:'a1 θ[k]',    unit:'', val:1.90, min:-2, max:3,  step:0.001 },
+  { k:'a2', label:'a2 θ[k-1]',  unit:'', val:-0.92,min:-2, max:2,  step:0.001 },
+  { k:'b1', label:'b1 u[k]',    unit:'', val:0.001,min:-0.2,max:0.2,step:0.0001 },
+  { k:'b2', label:'b2 u[k-1]',  unit:'', val:0.001,min:-0.2,max:0.2,step:0.0001 },
+  { k:'c1', label:'c1 α[k]',    unit:'', val:1.95, min:-2, max:3,  step:0.001 },
+  { k:'c2', label:'c2 α[k-1]',  unit:'', val:-0.95,min:-2, max:2,  step:0.001 },
+  { k:'d1', label:'d1 u[k]',    unit:'', val:0.01, min:-0.5,max:0.5,step:0.0005 },
+  { k:'d2', label:'d2 u[k-1]',  unit:'', val:0.01, min:-0.5,max:0.5,step:0.0005 },
+];
+const model = Object.fromEntries(MODEL.map(m => [m.k, m.val]));
+
+// ---- 传感器标定常量（遥测 → 物理单位）----
+const ENC_PER_REV = 1040;      // 编码器：1 圈 = 1040 计数（13线×4倍频×20减速比）
+const ANG_PER_180 = 2080;      // 角度：180° = 2080 计数
+
+// 虚拟仿真状态
+const vsim = {
+  running: false,
+  theta: 0, dtheta: 0,     // deg, deg/s
+  alpha: 0, dalpha: 0,     // deg, deg/s
+  th0: 0, th1: 0,          // ARX 历史 θ
+  al0: 0, al1: 0,          // ARX 历史 α
+  u0: 0,  u1: 0,           // ARX 历史 u
+  t: 0,
+  acc: 0,
+  u: 0,
+  // 控制器内部状态（与固件一致）
+  acPrev: 0,
+  posFilt: 0, posVel: 0, posInt: 0,
+  posTarget: 0,
+  steps: 0,
+  maxAbs: 0,
+};
+
+const VSIM_DT = 0.020;     // ARX 步长 20ms（与遥测同频）
+
+// ---------------------------------------------------------------- 模型面板
+const modelInputs = {};
+
+function buildModelPanel() {
+  const box = $('mlist');
+  box.innerHTML = '';
+  for (const m of MODEL) {
+    const row = document.createElement('div');
+    row.className = 'prow';
+
+    const k = document.createElement('span');
+    k.className = 'k';
+    k.textContent = m.label;
+
+    const rg = document.createElement('input');
+    rg.type = 'range';
+    rg.min = m.min; rg.max = m.max; rg.step = m.step;
+    rg.value = m.val;
+
+    const nm = document.createElement('input');
+    nm.type = 'number';
+    nm.value = m.val;
+    nm.step = m.step;
+    nm.title = m.unit;
+
+    rg.addEventListener('input', () => {
+      nm.value = rg.value;
+      model[m.k] = +rg.value;
+    });
+    nm.addEventListener('change', () => {
+      const v = +nm.value;
+      if (!isFinite(v)) { nm.value = model[m.k]; return; }
+      rg.value = v;
+      model[m.k] = v;
+    });
+
+    row.append(k, rg, nm);
+    box.appendChild(row);
+    modelInputs[m.k] = { range: rg, num: nm };
+  }
+}
+
+function setModelParam(k, v) {
+  model[k] = v;
+  const el = modelInputs[k];
+  if (el) {
+    // 滑块范围外的值只更新数字框
+    el.range.value = Math.min(Math.max(v, +el.range.min), +el.range.max);
+    el.num.value = (Math.abs(v) < 1 ? v.toFixed(3) : v.toFixed(2)).replace(/\.?0+$/,'');
+  }
+}
+
+// ---------------------------------------------------------------- 模型积分
+// ARX 递推（每 20ms 一步）：
+//   θ[k+1] = a1·θ[k] + a2·θ[k-1] + b1·u[k] + b2·u[k-1]
+//   α[k+1] = c1·α[k] + c2·α[k-1] + d1·u[k] + d2·u[k-1]
+// 虚拟运行时每 5ms 更新一次 PID，但模型按 20ms 推进（与遥测同频）。
+function modelStep(u, dt) {
+  // dt 忽略：ARX 是离散模型，固定 20ms 步长
+  const m = model;
+
+  // 保存历史
+  vsim.th1 = vsim.th0;  vsim.th0 = vsim.theta;
+  vsim.al1 = vsim.al0;  vsim.al0 = vsim.alpha;
+  vsim.u1  = vsim.u0;   vsim.u0  = u;
+
+  const thNew = m.a1 * vsim.th0 + m.a2 * vsim.th1 + m.b1 * vsim.u0 + m.b2 * vsim.u1;
+  const alNew = m.c1 * vsim.al0 + m.c2 * vsim.al1 + m.d1 * vsim.u0 + m.d2 * vsim.u1;
+
+  // 数值保护
+  if (!isFinite(thNew) || !isFinite(alNew) || Math.abs(thNew) > 200) {
+    vsim.running = false;
+    return;
+  }
+
+  // ---- 摆臂速度物理限速 ----
+  //   真实摆臂受电机转速和摩擦限制，不可能无限加速。
+  //   实测平衡时摆臂几乎不动；即使全力驱动，上限也在几百 °/s 量级。
+  //   不限速时 ARX 模型的 d1/d2 偏大会让摆臂飞到上千 °/s，明显快于真实系统。
+  const MAX_ARM_VEL = 400;                  // °/s
+  const dAlpha = (alNew - vsim.al0) / 0.02; // °/s
+  let alClamped = alNew;
+  if (Math.abs(dAlpha) > MAX_ARM_VEL) {
+    alClamped = vsim.al0 + Math.sign(dAlpha) * MAX_ARM_VEL * 0.02;
+  }
+
+  vsim.theta = thNew;
+  vsim.alpha = alClamped;
+
+  // 角速度仅用于显示
+  vsim.dtheta = (vsim.theta - vsim.th0) / 0.02;
+
+  // 摆杆超出 ±90° 视为倒下
+  if (vsim.theta > 90)  { vsim.theta = 90;  vsim.dtheta = 0; vsim.running = false; }
+  if (vsim.theta < -90) { vsim.theta = -90; vsim.dtheta = 0; vsim.running = false; }
+
+  // 摆臂角度归一化到 ±180（仅显示用）
+  if (vsim.alpha > 180)  vsim.alpha -= 360;
+  if (vsim.alpha < -180) vsim.alpha += 360;
+}
+
+// ---------------------------------------------------------------- 控制器
+// 与固件保持一致的实现（平衡环 + 位置环）
+function virtualControl() {
+  const P = readPanelParams();
+  const K = 2080 / 180;      // deg → ADC 计数
+  const E = 1040 / 360;      // deg → 编码器计数
+
+  const ac = vsim.theta * K;                 // 角度误差（ADC 计数）
+  const ec = vsim.alpha * E;                 // 位置（编码器计数）
+
+  // ---- 角度环 PD（5ms 差分）----
+  const dAc = ac - vsim.acPrev;
+  vsim.acPrev = ac;
+  let bal = -(P.BAL_KP * ac + P.BAL_KD * dAc);
+
+  // ---- 位置环（5ms 周期，与固件 POS_LOOP_FAST_ALWAYS=1 一致）----
+  const posErr = ec - vsim.posTarget;
+  // 一阶低通，Q4 定点 + 四舍五入（POS_FILT_K=45/1024）
+  const q4err = Math.round(posErr * 16);
+  vsim.posFilt += Math.round(((q4err - vsim.posFilt) * 45 + 512) / 1024);
+  const posVel = vsim.posFilt - (vsim.posVel || 0);
+  vsim.posVel = vsim.posFilt;
+
+  // 积分：每 25ms 累加一次（5 拍）
+  if (vsim.steps % 5 === 0 && P.POS_KI > 0) {
+    const f = vsim.posFilt / 16;                       // 还原真实计数
+    if (Math.abs(f) <= 40 && Math.abs(posVel / 16) <= 2) {
+      vsim.posInt += Math.round(f * P.POS_KI / 4096);
+      vsim.posInt = Math.max(-647, Math.min(647, vsim.posInt));
+    }
+  }
+
+  // PD + I，Q4 还原，D 项 ×5（对应固件 POS_D_SCALE）
+  let pos = (P.POS_KP * vsim.posFilt + P.POS_KD * posVel * 5) / 16 + vsim.posInt;
+  pos = Math.max(-2587, Math.min(2587, pos));
+
+  let u = bal - pos;
+  u = Math.max(-5175, Math.min(5175, u));
+  return u;
+}
+
+// 读取面板上的 PID 参数
+function readPanelParams() {
+  const get = k => {
+    const p = PARAMS.find(q => q.key === k);
+    return p ? +pInputs[p.addr].num.value : 0;
+  };
+  return {
+    BAL_KP: get('BAL_KP'), BAL_KD: get('BAL_KD'),
+    POS_KP: get('POS_KP'), POS_KD: get('POS_KD'), POS_KI: get('POS_KI'),
+  };
+}
+
+// ---------------------------------------------------------------- 虚拟运行
+function vsimReset(theta0) {
+  vsim.running = false;
+  vsim.theta  = theta0 !== undefined ? theta0 : 6;   // 初始倾角 6°
+  vsim.alpha  = 0;
+  vsim.t = 0; vsim.acc = 0; vsim.u = 0;
+  vsim.steps = 0;
+  vsim.maxAbs = Math.abs(vsim.theta);
+
+  // ---- ARX 历史初始化 ----
+  //   ⚠ 必须让 th0/th1 都等于初始倾角，否则递推第一步就错了。
+  //     曾漏掉这一步：theta=6 但 th0=th1=0 → ARX 认为"角度在剧烈变化"，
+  //     首拍就产生巨大控制量，闭环 1 秒内崩溃。
+  vsim.th0 = vsim.theta;
+  vsim.th1 = vsim.theta;
+  vsim.al0 = vsim.alpha;
+  vsim.al1 = vsim.alpha;
+  vsim.u0  = 0;
+  vsim.u1  = 0;
+
+  // ---- 控制器状态（与固件捕获瞬间一致）----
+  vsim.acPrev = vsim.theta * (2080/180);
+  vsim.posFilt = 0; vsim.posVel = 0; vsim.posInt = 0;
+  vsim.posTarget = vsim.alpha * (1040/360);   // 捕获时 pos_target = 当前编码器位置
+
+  simTrail = [];
+  updateVInfo();
+}
+
+function vsimTick(dtMs) {
+  if (!vsim.running) return;
+  vsim.acc += dtMs;
+  // 每帧最多跑 40 步（200ms），防止后台切回时爆炸
+  let n = 0;
+  while (vsim.acc >= VSIM_DT * 1000 && n < 40) {
+    vsim.acc -= VSIM_DT * 1000;
+    const u = virtualControl();
+    vsim.u = u;
+    modelStep(u, VSIM_DT);
+    vsim.t += VSIM_DT;
+    vsim.steps++;
+    const a = Math.abs(vsim.theta);
+    if (a > vsim.maxAbs) vsim.maxAbs = a;
+    n++;
+    if (a >= 89.9) { vsim.running = false; break; }   // 倒下，停止
+  }
+  updateVInfo();
+}
+
+function updateVInfo() {
+  const el = $('vinfo');
+  if (!el) return;
+  const P = readPanelParams();
+  const cls = Math.abs(vsim.theta) < 5 ? 'g' : (Math.abs(vsim.theta) < 15 ? 'y' : 'r');
+  const stateTxt = vsim.running ? '运行中' : (Math.abs(vsim.theta) >= 89 ? '已倒下' : '停止');
+  el.innerHTML =
+    `t <b>${vsim.t.toFixed(2)}s</b>  ` +
+    `θ <b class="${cls}">${vsim.theta.toFixed(2)}°</b>  ` +
+    `α <b>${vsim.alpha.toFixed(1)}°</b>\n` +
+    `u <b>${vsim.u.toFixed(0)}</b>  峰值 <b>${vsim.maxAbs.toFixed(1)}°</b>  ` +
+    `<b>${stateTxt}</b>`;
+}
+
+// ---------------------------------------------------------------- 系统辨识
+// ============================================================================
+// 方法：ARX 最小二乘（离散、参数线性、有解析解）
+//
+//   摆杆：θ[k+1] = a1·θ[k] + a2·θ[k-1] + b1·u[k] + b2·u[k-1]
+//   摆臂：α[k+1] = c1·α[k] + c2·α[k-1] + d1·u[k] + d2·u[k-1]
+//
+//   写成回归：y = X·β，β = (XᵀX)⁻¹Xᵀy —— 4 元线性最小二乘，直接求解。
+//
+// 【为何这是唯一可靠的做法】此前尝试过并全部失败的方法：
+//   1) 数值微分求 θ̈ 再回归
+//      → 二阶微分放大噪声 1/T²=2500 倍，ω=8 辨成 4.1
+//   2) 实测 u 驱动开环仿真做代价
+//      → 开环不稳定极点使误差按 e^(ωt) 爆炸，R²=0%，参数跑边界
+//   3) 短时域（L=5帧）开环预测
+//      → 时域太短，θ 主要由初值惯性决定，ω/ζ 不可观测
+//   4) 闭环输出误差（模型+PID 仿真对比）
+//      → 结构正确但优化病态，实测同样收敛到错误参数
+//   5) 连续模型 5~6 参数联合优化
+//      → 参数等价性导致不唯一（Ka/ba 只有比值可辨识）
+//
+//   ARX 的优势：参数线性 ⇒ 全局最优解、无需迭代、不发散、只用原始数据不微分。
+//   代价：模型是离散传递函数，物理意义不直观，但仿真行为正确。
+// ============================================================================
+
+// 4 元线性最小二乘（正规方程 + 高斯消元，带部分主元）
+//   X: 数组的数组（每行 4 个回归量），y: 目标值数组
+//   返回 {b:[4], r2} 或 null
+function lstsq4(X, y) {
+  const A = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];
+  const rhs = [0,0,0,0];
+  let cnt = 0;
+
+  for (let k = 0; k < X.length; k++) {
+    const x = X[k], v = y[k];
+    if (!isFinite(v)) continue;
+    let ok = true;
+    for (let i = 0; i < 4; i++) if (!isFinite(x[i])) { ok = false; break; }
+    if (!ok) continue;
+    for (let i = 0; i < 4; i++) {
+      for (let j = 0; j < 4; j++) A[i][j] += x[i] * x[j];
+      rhs[i] += x[i] * v;
+    }
+    cnt++;
+  }
+  if (cnt < 20) return null;
+
+  const M = [
+    [A[0][0],A[0][1],A[0][2],A[0][3],rhs[0]],
+    [A[1][0],A[1][1],A[1][2],A[1][3],rhs[1]],
+    [A[2][0],A[2][1],A[2][2],A[2][3],rhs[2]],
+    [A[3][0],A[3][1],A[3][2],A[3][3],rhs[3]],
+  ];
+  for (let c = 0; c < 4; c++) {
+    let piv = c;
+    for (let r = c + 1; r < 4; r++)
+      if (Math.abs(M[r][c]) > Math.abs(M[piv][c])) piv = r;
+    if (Math.abs(M[piv][c]) < 1e-12) return null;     // 奇异（缺少激励）
+    [M[c], M[piv]] = [M[piv], M[c]];
+    for (let r = 0; r < 4; r++) {
+      if (r === c) continue;
+      const f = M[r][c] / M[c][c];
+      for (let k = c; k < 5; k++) M[r][k] -= f * M[c][k];
+    }
+  }
+  const b = [M[0][4]/M[0][0], M[1][4]/M[1][1], M[2][4]/M[2][2], M[3][4]/M[3][3]];
+  if (!b.every(isFinite)) return null;
+
+  // R²
+  let mean = 0, m = 0;
+  for (const v of y) if (isFinite(v)) { mean += v; m++; }
+  mean /= (m || 1);
+  let ssRes = 0, ssTot = 0;
+  for (let k = 0; k < X.length; k++) {
+    if (!isFinite(y[k])) continue;
+    const pred = b[0]*X[k][0] + b[1]*X[k][1] + b[2]*X[k][2] + b[3]*X[k][3];
+    ssRes += (y[k] - pred) ** 2;
+    ssTot += (y[k] - mean) ** 2;
+  }
+  const r2 = ssTot > 1e-12 ? 1 - ssRes / ssTot : 0;
+  return { b, r2, n: cnt };
+}
+
+function identify() {
+  const aArr = ch[0].data, eArr = ch[1].data, pArr = ch[3].data;
+  const n = Math.min(aArr.length, eArr.length, pArr.length);
+  if (n < 150) { log('数据不足，至少需要 150 帧（3 秒）', 'e'); return; }
+
+  // ---- 单位换算 ----
+  const thAll = aArr.map(v => v * 180 / ANG_PER_180);    // ADC 计数 → 度
+  const alAll = eArr.map(v => v * 360 / ENC_PER_REV);    // 编码器计数 → 度
+  const uAll  = pArr.map(v => v);
+
+  // ---- 截取连续有效段（|θ| < 50°，线性化范围内）----
+  let s0 = 0, cnt = 0;
+  while (s0 < n && Math.abs(thAll[s0]) > 50) s0++;
+  for (let i = s0; i < n; i++) { if (Math.abs(thAll[i]) > 50) break; cnt++; }
+  if (cnt < 150) { log('未找到有效数据段（摆杆需在 ±50° 内且足够长）', 'e'); return; }
+
+  const USE = Math.min(cnt, 1500);           // 最多 30 秒
+  const th = thAll.slice(s0, s0 + USE);
+  const al = alAll.slice(s0, s0 + USE);
+  const u  = uAll.slice(s0, s0 + USE);
+
+  const thRange = Math.max(...th) - Math.min(...th);
+  if (thRange < 0.3) {
+    log(`摆杆角度变化仅 ${thRange.toFixed(2)}°，缺少激励，无法辨识`, 'e');
+    return;
+  }
+
+  // ---- 构造回归矩阵（从 k=1 开始，需要 k-1 与 k+1）----
+  //   θ 方程
+  const Xth = [], Yth = [];
+  //   α 方程
+  const Xal = [], Yal = [];
+  for (let k = 1; k < USE - 1; k++) {
+    Xth.push([th[k], th[k-1], u[k], u[k-1]]);
+    Yth.push(th[k+1]);
+    Xal.push([al[k], al[k-1], u[k], u[k-1]]);
+    Yal.push(al[k+1]);
+  }
+
+  const rTh = lstsq4(Xth, Yth);
+  const rAl = lstsq4(Xal, Yal);
+
+  if (!rTh) { log('摆杆方程求解失败：数据矩阵奇异（激励不足或角度无变化）', 'e'); return; }
+  if (!rAl) { log('摆臂方程求解失败：数据矩阵奇异（摆臂几乎不动）', 'e'); return; }
+
+  // ==========================================================================
+  // 第二步：闭环一致性精修（关键！）
+  //
+  //   问题：开环最小二乘虽然 R²=99.7%，但辨识出的 b1/b2 有偏
+  //         （闭环下 u 与 θ 相关，最小二乘假设二者独立）。
+  //         实测后果：用辨识模型 + 同样 PID 做闭环仿真，1 秒内就发散
+  //         （开环拟合好 ≠ 闭环可重现）。
+  //
+  //   修正：以最小二乘结果为起点，用【闭环输出误差】精修 4 个系数：
+  //         模型 + 相同 PID 闭环仿真 → 与实测 θ 比较 → 最小化误差。
+  //         这样保证「用这组系数跑闭环，结果与实测一致」。
+  // ==========================================================================
+  const pid = readPanelParams();
+  const pidv = { KP: pid.BAL_KP, KD: pid.BAL_KD,
+                 PKP: pid.POS_KP, PKD: pid.POS_KD, PKI: pid.POS_KI };
+
+  // 闭环仿真：ARX 模型 + PID，返回 θ 轨迹
+  function simCl(p, th0, al0, N) {
+    const K = 2080/180, E = 1040/360;
+    let th1 = th0, th0v = th0, al1 = al0, al0v = al0;
+    let u1 = 0, u0 = 0;
+    let acPrev = th0 * K;
+    let posFilt = 0, posVel = 0, posInt = 0;
+    const posTarget = al0 * E;
+
+    const out = new Float64Array(N);
+    for (let i = 0; i < N; i++) {
+      out[i] = th0v;
+
+      // 每 20ms 算一次 u（与 ARX 假设一致）
+      const ac = th0v * K;
+      const dAc = ac - acPrev; acPrev = ac;
+      let bal = -(pidv.KP * ac + pidv.KD * dAc);
+
+      const ec = al0v * E;
+      const pe = ec - posTarget;
+      posFilt += ((pe * 16 - posFilt) * 45 + 512) / 1024;
+      const pv = posFilt - posVel; posVel = posFilt;
+
+      if (pidv.PKI > 0 && i % 5 === 0) {
+        const f = posFilt / 16;
+        if (Math.abs(f) <= 40 && Math.abs(pv / 16) <= 2) {
+          posInt += Math.round(f * pidv.PKI / 4096);
+          posInt = Math.max(-647, Math.min(647, posInt));
+        }
+      }
+
+      let pos = (pidv.PKP * posFilt + pidv.PKD * pv * 5) / 16 + posInt;
+      pos = Math.max(-2587, Math.min(2587, pos));
+      let u = bal - pos;
+      u = Math.max(-5175, Math.min(5175, u));
+
+      const thN = p.a1*th0v + p.a2*th1 + p.b1*u + p.b2*u0;
+      const alN = p.c1*al0v + p.c2*al1 + p.d1*u + p.d2*u0;
+      if (!isFinite(thN) || Math.abs(thN) > 200) return null;
+
+      th1 = th0v; th0v = thN;
+      al1 = al0v; al0v = alN;
+      u1 = u0; u0 = u;
+    }
+    return out;
+  }
+
+  const NUSE = Math.min(USE, 200);       // 用前 4 秒：闭环不稳定系统误差随时间累积，
+                                          // 时域太长会让优化无解（实测 400帧时 R² 仅 5%）
+  const thUse = th.slice(0, NUSE);
+  const alUse = al.slice(0, NUSE);
+  const meanU = thUse.reduce((x,y)=>x+y,0) / NUSE;
+  let varU = 0; for (const v of thUse) varU += (v-meanU)**2;
+  varU = Math.max(varU/NUSE, 1e-4);
+
+  const clCost = (q) => {
+    const sim = simCl(q, thUse[0], alUse[0], NUSE);
+    if (!sim) return Infinity;
+    let se = 0;
+    for (let i = 0; i < NUSE; i++) { const e = sim[i]-thUse[i]; se += e*e; }
+    return se / NUSE;
+  };
+
+  let cur = {
+    a1: rTh.b[0], a2: rTh.b[1], b1: rTh.b[2], b2: rTh.b[3],
+    c1: rAl.b[0], c2: rAl.b[1], d1: rAl.b[2], d2: rAl.b[3],
+  };
+  let bestC = clCost(cur);
+  const startC = bestC;
+
+  // 只精修摆杆 4 个系数（摆臂对闭环稳定性影响小，且易发散）
+  let stp = { a1: 0.02, a2: 0.02, b1: 0.0005, b2: 0.0005 };
+  for (let it = 0; it < 120; it++) {
+    let imp = false;
+    for (const k of ['a1','a2','b1','b2']) {
+      for (const d of [1,-1]) {
+        const q = Object.assign({}, cur);
+        q[k] += d * stp[k];
+        const c = clCost(q);
+        if (c < bestC - 1e-9) { bestC = c; cur = q; imp = true; }
+      }
+    }
+    if (!imp) {
+      let done = true;
+      for (const k of ['a1','a2','b1','b2']) {
+        stp[k] *= 0.5;
+        if (stp[k] > Math.abs(cur[k]) * 1e-4 + 1e-7) done = false;
+      }
+      if (done) break;
+    }
+  }
+
+  // ---- 摆臂模型稳定性投影（关键）----
+  //   摆臂有摩擦，极点必须在单位圆内。最小二乘常给出 |z| 略 > 1，
+  //   会导致仿真时摆臂无限加速（实测 |z|=1.033 → 摆臂飞转到几百度）。
+  const prj = projectPoles(cur.c1, cur.c2, 0.995);
+  const armFixed = (Math.abs(prj.k1 - cur.c1) > 1e-9 || Math.abs(prj.k2 - cur.c2) > 1e-9);
+  cur.c1 = prj.k1;
+  cur.c2 = prj.k2;
+
+  // ---- 写回面板 ----
+  for (const k of ['a1','a2','b1','b2','c1','c2','d1','d2']) setModelParam(k, cur[k]);
+
+  const clR2 = Math.max(0, 1 - bestC / varU);
+  const clRms = Math.sqrt(bestC);
+  const f4 = v => (Math.abs(v) >= 0.01 ? v.toFixed(4) : v.toExponential(2));
+
+  log(`ARX 辨识完成（${USE} 帧 / ${(USE/50).toFixed(1)}s，摆幅 ${thRange.toFixed(1)}°）`, 'ok');
+  log(`  摆杆 θ: a1=${f4(cur.a1)} a2=${f4(cur.a2)} b1=${f4(cur.b1)} b2=${f4(cur.b2)}`, 'ok');
+  log(`  摆臂 α: c1=${f4(cur.c1)} c2=${f4(cur.c2)} d1=${f4(cur.d1)} d2=${f4(cur.d2)}`, 'ok');
+  log(`  开环拟合 R²：θ ${(rTh.r2*100).toFixed(1)}% / α ${(rAl.r2*100).toFixed(1)}%`,
+      rTh.r2 > 0.9 ? 'ok' : '');
+  log(`  闭环一致性：RMS ${clRms.toFixed(2)}°，R²=${(clR2*100).toFixed(1)}%` +
+      `（精修前 ${Math.sqrt(startC).toFixed(2)}°）`,
+      clR2 > 0.8 ? 'ok' : (clR2 > 0.5 ? '' : 'e'));
+  if (armFixed) {
+    log(`  ⚠ 摆臂模型极点在单位圆外（|z|>1），已投影回 0.995：` +
+        `c1 ${rAl.b[0].toFixed(4)}→${cur.c1.toFixed(4)}，` +
+        `c2 ${rAl.b[1].toFixed(4)}→${cur.c2.toFixed(4)}`, '');
+  }
+
+  updateVInfo();
+}
+
+// 二阶 ARX 极点稳定性投影
+//   特征方程 z² − k1·z − k2 = 0
+//   摆杆：极点应【在单位圆外】（倒立摆开环不稳定，物理正确）
+//   摆臂：极点应【在单位圆内】（有摩擦，必然收敛）
+//
+//   为何需要：最小二乘从有限数据拟合，摆臂模型常得到 |z| 略大于 1
+//   （实测 c1=1.797, c2=-1.067 → |z|=1.033），仿真时摆臂会无限加速，
+//   表现为「摆臂飞转、比真实系统快得多」。必须投影回稳定域。
+function projectPoles(k1, k2, maxMag) {
+  const disc = k1*k1 + 4*k2;
+  if (disc >= 0) {
+    const sq = Math.sqrt(disc);
+    let r1 = (k1 + sq) / 2, r2 = (k1 - sq) / 2;
+    const mag = Math.max(Math.abs(r1), Math.abs(r2));
+    if (mag > maxMag) {
+      const s = maxMag / mag;
+      r1 *= s; r2 *= s;
+    }
+    return { k1: r1 + r2, k2: -(r1 * r2) };
+  } else {
+    // 复极点：|z| = sqrt(-k2)（当 k2 < 0）
+    const mag = Math.sqrt(Math.abs(k2));
+    if (mag > maxMag && k2 < 0) {
+      const s2 = (maxMag * maxMag) / Math.abs(k2);
+      return { k1: k1 * Math.sqrt(s2), k2: k2 * s2 };
+    }
+    return { k1, k2 };
+  }
+}
+
+// 模型验证：用 ARX 递推从初始状态重放，与实测比较
+//   ARX 是稳定递推（用实测 u），不会像连续模型那样发散
+function validateQuiet() {
+  const aArr = ch[0].data, eArr = ch[1].data, pArr = ch[3].data;
+  const n = Math.min(aArr.length, eArr.length, pArr.length);
+  if (n < 150) return null;
+
+  const thAll = aArr.map(v => v * 180 / ANG_PER_180);
+  const alAll = eArr.map(v => v * 360 / ENC_PER_REV);
+  const uAll  = pArr.map(v => v);
+
+  let s0 = 0, cnt = 0;
+  while (s0 < n && Math.abs(thAll[s0]) > 50) s0++;
+  for (let i = s0; i < n; i++) { if (Math.abs(thAll[i]) > 50) break; cnt++; }
+  if (cnt < 150) return null;
+
+  const USE = Math.min(cnt, 1000);
+  const th = thAll.slice(s0, s0 + USE);
+  const al = alAll.slice(s0, s0 + USE);
+  const u  = uAll.slice(s0, s0 + USE);
+
+  const m = model;
+  // 从第 1 帧开始递推
+  let th1 = th[0], th0 = th[1], al1 = al[0], al0 = al[1];
+  let u1 = u[0], u0 = u[1];
+
+  let se = 0, cnt2 = 0;
+  for (let k = 1; k < USE - 1; k++) {
+    const thN = m.a1*th0 + m.a2*th1 + m.b1*u0 + m.b2*u1;
+    const alN = m.c1*al0 + m.c2*al1 + m.d1*u0 + m.d2*u1;
+    const e = thN - th[k+1];
+    if (!isFinite(e)) break;
+    se += e * e; cnt2++;
+    th1 = th0; th0 = thN;
+    al1 = al0; al0 = alN;
+    u1 = u0;  u0 = u[k+1];
+  }
+  if (cnt2 < 20) return null;
+
+  const mean = th.slice(1, 1+cnt2).reduce((x, y) => x + y, 0) / cnt2;
+  let vs = 0;
+  for (let i = 0; i < cnt2; i++) vs += (th[i+1] - mean) ** 2;
+  vs /= cnt2;
+
+  const mse = se / cnt2;
+  return {
+    rms: Math.sqrt(mse),
+    std: Math.sqrt(Math.max(vs, 1e-6)),
+    r2: Math.max(0, 1 - mse / Math.max(vs, 1e-6)),
+  };
+}
+
+// ---------------------------------------------------------------- 模型验证
+// ARX 是稳定递推（用实测 u 逐步推进），不会像连续模型那样发散，
+// 所以可以全程重放对比。
+function validateModel() {
+  const vr = validateQuiet();
+  if (!vr) { log('验证失败：数据不足或模型发散', 'e'); return; }
+
+  const cls = vr.r2 > 0.9 ? 'ok' : (vr.r2 > 0.7 ? '' : 'e');
+  log(`模型验证（ARX 全程重放）：RMS ${vr.rms.toFixed(2)}°，` +
+      `R²=${(vr.r2*100).toFixed(1)}%（实测 σ=${vr.std.toFixed(2)}°）`, cls);
+  log('  R²>90% 模型可信；<70% 建议重新辨识（需有足够扰动激励）', cls);
+
+  const el = $('vinfo');
+  el.innerHTML += `\n<span class="${cls}">验证 RMS ${vr.rms.toFixed(2)}° / R² ${(vr.r2*100).toFixed(0)}%</span>`;
+}
+
+// ---------------------------------------------------------------- 模式切换
+function setSimMode(m) {
+  simMode = m;
+  for (const b of document.querySelectorAll('#modebar .mb'))
+    b.classList.toggle('on', b.dataset.mode === m);
+  $('modelpanel').style.display = (m === 'virtual') ? '' : 'none';
+  $('tagL').textContent = (m === 'virtual') ? '俯视 · 虚拟摆臂' : '俯视 · 摆臂旋转';
+  $('tagR').textContent = (m === 'virtual') ? '侧视 · 虚拟摆杆' : '侧视 · 摆杆倾角';
+  if (m === 'virtual') { simTrail = []; vsimReset(); }
+  else { simTrail = []; }
+}
+
+// ---------------------------------------------------------------- 主渲染循环
+function render() {
+  for (let i = 0; i < 4; i++) drawChart(i);
+
+  // 虚拟仿真推进（按真实时间步进）
+  if (simMode === 'virtual') {
+    const now = performance.now();
+    const dt = renderLastT ? (now - renderLastT) : 16;
+    renderLastT = now;
+    vsimTick(Math.min(dt, 200));
+  } else {
+    renderLastT = performance.now();
+  }
+
+  drawSim();
+  $('stFrame').textContent = frameCount;
+  $('stErr').textContent = errCount;
+  $('stChk').textContent = chkFail;
+  $('stSpike').textContent = spikeCount;
+  $('stSpike').style.color = spikeCount > 0 ? '#d29922' : '#3fb950';
+  $('stRate').textContent = rateEma.toFixed(1);
+  requestAnimationFrame(render);
+}
+
+let renderLastT = 0;
+
+// ============================================================================
+// 旋转倒立摆仿真视图（由真实串口数据驱动）
+//
+//   摆臂角度：编码器计数 → 角度
+//       1 圈 = 1040 计数（13 线 × 4 倍频 × 20 减速比）
+//       θ_arm = enc_rel / 1040 × 360°
+//
+//   摆杆倾角：ADC 计数 → 角度
+//       ANGLE_SPAN_UP = 2080 计数 对应 180°
+//       θ_pend = ang_err / 2080 × 180°   （0° = 竖直向上）
+//
+//   左图俯视：摆臂在水平面旋转；摆杆的水平投影沿臂方向，长度 ∝ sin(θ)
+//   右图侧视：摆杆相对竖直的倾角（最直观反映平衡状态）
+// ============================================================================
+
+let simTrail = [];          // 摆臂末端的轨迹
+let simLastAngErr = 0;      // 用于算角速度
+let simLastT = 0;
+let simVelDeg = 0;
+
+// 'real' = 实时串口数据；'virtual' = 模型仿真
+let simMode = 'real';
+
+function drawSim() {
+  const cv = $('sim');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = cv.getBoundingClientRect();
+  const w = Math.max(1, Math.floor(rect.width));
+  const h = Math.max(1, Math.floor(rect.height));
+  if (cv.width !== Math.round(w*dpr) || cv.height !== Math.round(h*dpr)) {
+    cv.width = Math.round(w*dpr);
+    cv.height = Math.round(h*dpr);
+  }
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+  g.fillStyle = '#0b1017';
+  g.fillRect(0, 0, w, h);
+
+  // ---- 数据源：实时 or 虚拟 ----
+  let pendDeg, armDeg, velDeg;
+  if (simMode === 'virtual') {
+    pendDeg = vsim.theta;
+    armDeg  = vsim.alpha;
+    velDeg  = vsim.dtheta;
+    simVelDeg = velDeg;
+  } else {
+    const nA = ch[0].data.length, nE = ch[1].data.length;
+    const angErr = nA ? ch[0].data[nA-1] : 0;      // 已减去零点，单位：ADC 计数
+    const encRel = nE ? ch[1].data[nE-1] : 0;      // 已减去零点，单位：计数
+    pendDeg = angErr * 180 / ANG_PER_180;          // 摆杆倾角（0 = 竖直向上）
+    armDeg  = encRel * 360 / ENC_PER_REV;          // 摆臂角度
+
+    // 角速度（对倾角做差分，用于显示）
+    const now = performance.now();
+    if (simLastT) {
+      const dt = (now - simLastT) / 1000;
+      if (dt > 0.001 && dt < 0.5) {
+        const v = (pendDeg - simLastAngErr) / dt;
+        simVelDeg = simVelDeg * 0.7 + v * 0.3;
+      }
+    }
+    simLastT = now;
+    simLastAngErr = pendDeg;
+    velDeg = simVelDeg;
+  }
+
+  const halfW = w / 2;
+  const cx = halfW / 2;
+  const cy = h / 2 + 6;
+  const R = Math.min(halfW, h) * 0.34;           // 摆臂半径（像素）
+
+  // ================= 左：俯视图 =================
+  drawTopView(g, cx, cy, R, armDeg, pendDeg);
+
+  // ================= 右：侧视图 =================
+  drawSideView(g, halfW + cx, cy, R, pendDeg);
+
+  // ---- 读数 ----
+  $('rdArm').textContent  = armDeg.toFixed(1) + '°';
+  $('rdPend').textContent = pendDeg.toFixed(2) + '°';
+  $('rdVel').textContent  = velDeg.toFixed(0) + '°/s';
+
+  // 平衡状态着色
+  const ok = Math.abs(pendDeg) < 5;
+  $('rdPend').style.color = ok ? '#3fb950' : (Math.abs(pendDeg) < 15 ? '#d29922' : '#f85149');
+}
+
+function drawTopView(g, cx, cy, R, armDeg, pendDeg) {
+  const rad = armDeg * Math.PI / 180;
+
+  // 参考圆
+  g.strokeStyle = '#1f2630';
+  g.lineWidth = 1;
+  g.beginPath();
+  g.arc(cx, cy, R, 0, Math.PI * 2);
+  g.stroke();
+  // 十字参考
+  g.strokeStyle = '#161d26';
+  g.beginPath();
+  g.moveTo(cx - R - 8, cy); g.lineTo(cx + R + 8, cy);
+  g.moveTo(cx, cy - R - 8); g.lineTo(cx, cy + R + 8);
+  g.stroke();
+
+  const tipX = cx + R * Math.cos(rad);
+  const tipY = cy + R * Math.sin(rad);
+
+  // ---- 摆臂轨迹（最近 60 个位置，渐隐）----
+  if (!paused) {
+    simTrail.push([tipX, tipY]);
+    if (simTrail.length > 60) simTrail.shift();
+  }
+  for (let i = 0; i < simTrail.length; i++) {
+    const a = (i + 1) / simTrail.length;
+    g.fillStyle = `rgba(129,199,132,${a * 0.28})`;
+    g.beginPath();
+    g.arc(simTrail[i][0], simTrail[i][1], 1.6, 0, Math.PI * 2);
+    g.fill();
+  }
+
+  // ---- 摆臂 ----
+  g.strokeStyle = '#81c784';
+  g.lineWidth = 5;
+  g.lineCap = 'round';
+  g.beginPath();
+  g.moveTo(cx, cy);
+  g.lineTo(tipX, tipY);
+  g.stroke();
+
+  // ---- 摆杆（水平投影：长度 ∝ sin θ，沿臂方向）----
+  //   θ=0（竖直）时投影为 0，此时用一个小圆点表示"正在顶端"
+  const proj = Math.sin(pendDeg * Math.PI / 180) * R * 0.85;
+  const px = tipX + proj * Math.cos(rad);
+  const py = tipY + proj * Math.sin(rad);
+
+  g.strokeStyle = Math.abs(pendDeg) < 5 ? '#3fb950' : '#ffb74d';
+  g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(tipX, tipY);
+  g.lineTo(px, py);
+  g.stroke();
+
+  // ---- 支点 ----
+  g.fillStyle = '#30363d';
+  g.beginPath(); g.arc(cx, cy, 5, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#8b949e';
+  g.beginPath(); g.arc(cx, cy, 2.2, 0, Math.PI * 2); g.fill();
+
+  // ---- 摆臂末端铰点 ----
+  g.fillStyle = '#c9d1d9';
+  g.beginPath(); g.arc(tipX, tipY, 3, 0, Math.PI * 2); g.fill();
+
+  // ---- 竖直时的顶端标记 ----
+  if (Math.abs(pendDeg) < 2) {
+    g.strokeStyle = '#3fb950';
+    g.lineWidth = 1.5;
+    g.beginPath();
+    g.arc(tipX, tipY, 7, 0, Math.PI * 2);
+    g.stroke();
+  }
+}
+
+function drawSideView(g, cx, cy, R, pendDeg) {
+  const L = R * 1.9;                 // 摆杆长度（像素）
+  const rad = pendDeg * Math.PI / 180;
+
+  // 竖直参考线
+  g.strokeStyle = '#1f2630';
+  g.setLineDash([3, 4]);
+  g.lineWidth = 1;
+  g.beginPath();
+  g.moveTo(cx, cy); g.lineTo(cx, cy - L - 12);
+  g.stroke();
+  g.setLineDash([]);
+
+  // 地面/支点横线
+  g.strokeStyle = '#30363d';
+  g.beginPath();
+  g.moveTo(cx - R * 0.9, cy); g.lineTo(cx + R * 0.9, cy);
+  g.stroke();
+
+  // 摆杆：0° 指向上方
+  const ex = cx + L * Math.sin(rad);
+  const ey = cy - L * Math.cos(rad);
+
+  g.strokeStyle = Math.abs(pendDeg) < 5 ? '#3fb950'
+                : (Math.abs(pendDeg) < 15 ? '#ffb74d' : '#f85149');
+  g.lineWidth = 4;
+  g.lineCap = 'round';
+  g.beginPath();
+  g.moveTo(cx, cy);
+  g.lineTo(ex, ey);
+  g.stroke();
+
+  // 末端质量块
+  g.fillStyle = g.strokeStyle;
+  g.beginPath(); g.arc(ex, ey, 5, 0, Math.PI * 2); g.fill();
+
+  // 支点
+  g.fillStyle = '#30363d';
+  g.beginPath(); g.arc(cx, cy, 4.5, 0, Math.PI * 2); g.fill();
+
+  // 角度弧
+  if (Math.abs(pendDeg) > 3) {
+    g.strokeStyle = 'rgba(139,148,158,.5)';
+    g.lineWidth = 1;
+    g.beginPath();
+    const a0 = -Math.PI/2, a1 = -Math.PI/2 + rad;
+    g.arc(cx, cy, L * 0.42, Math.min(a0,a1), Math.max(a0,a1));
+    g.stroke();
+  }
+}
+
+// ---------------------------------------------------------------- 连接
+async function connect() {
+  if (!('serial' in navigator)) {
+    log('当前浏览器不支持 Web Serial。请用 Chrome / Edge 86+ 打开。', 'e');
+    return;
+  }
+  try {
+    port = await navigator.serial.requestPort();
+    const baudRate = +$('baud').value;
+    await port.open({ baudRate, dataBits: 8, stopBits: 1, parity: 'none', flowControl: 'none' });
+    writer = port.writable.getWriter();
+    keepReading = true;
+
+    $('btnConn').textContent = '断开';
+    $('btnConn').classList.remove('primary');
+    $('btnConn').classList.add('danger');
+    for (const id of ['btnPause','btnClear','btnCsv','btnPush','btnReset'])
+      $(id).disabled = false;
+    $('dot').className = 'dot on';
+    $('stTxt').textContent = `${baudRate} 8N1`;
+    log(`已连接，波特率 ${baudRate} 8N1`);
+
+    readLoop();
+  } catch (e) {
+    if (e && e.name === 'NotFoundError') log('用户取消了端口选择');
+    else log('打开串口失败：' + (e && e.message ? e.message : e), 'e');
+  }
+}
+
+async function disconnect() {
+  keepReading = false;
+  try { if (reader) await reader.cancel(); } catch (_) {}
+  try { if (writer) { writer.releaseLock(); writer = null; } } catch (_) {}
+  try { if (port) await port.close(); } catch (_) {}
+  reader = null; port = null;
+
+  $('btnConn').textContent = '连接串口';
+  $('btnConn').classList.add('primary');
+  $('btnConn').classList.remove('danger');
+  for (const id of ['btnPause','btnClear','btnCsv','btnPush','btnReset'])
+    $(id).disabled = true;
+  $('dot').className = 'dot';
+  $('stTxt').textContent = '未连接';
+  rateEma = 0;
+  log('已断开');
+}
+
+async function readLoop() {
+  while (port && port.readable && keepReading) {
+    let r;
+    try {
+      r = port.readable.getReader();
+      reader = r;
+      while (keepReading) {
+        const { value, done } = await r.read();
+        if (done) break;
+        if (value && value.length) feed(value);
+      }
+    } catch (e) {
+      if (keepReading) log('读取中断：' + (e && e.message ? e.message : e), 'e');
+      break;
+    } finally {
+      try { r && r.releaseLock(); } catch (_) {}
+      reader = null;
+    }
+  }
+  if (port) await disconnect();
+}
+
+// ---------------------------------------------------------------- 交互
+$('btnConn').addEventListener('click', () => { if (port) disconnect(); else connect(); });
+
+$('btnPause').addEventListener('click', () => {
+  paused = !paused;
+  $('btnPause').textContent = paused ? '继续' : '暂停';
+});
+
+$('btnClear').addEventListener('click', () => {
+  for (const c of ch) { c.data.length = 0; c.sum = 0; c.n = 0; c.min = 0; c.max = 0; }
+  frameCount = 0; errCount = 0; chkFail = 0; rateEma = 0;
+  rawSpike.length = 0; spikeCount = 0;
+  simTrail = []; simLastT = 0; simVelDeg = 0; simLastAngErr = 0;
+});
+
+$('btnCsv').addEventListener('click', () => {
+  const n = Math.max(...ch.map(c => c.data.length));
+  if (!n) { log('没有数据可导出', 'e'); return; }
+  const lines = ['index,ang_err,enc1,enc2,pwm'];
+  for (let k = 0; k < n; k++)
+    lines.push([k, ch[0].data[k] ?? '', ch[1].data[k] ?? '', ch[2].data[k] ?? '', ch[3].data[k] ?? ''].join(','));
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `pendulum_${new Date().toISOString().replace(/[:.]/g,'-')}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  log(`已导出 ${n} 行`);
+});
+
+// 全部下发：单帧 9 字节 @115200 ≈ 0.78ms，间隔 3ms 足够设备逐帧解析
+$('btnPush').addEventListener('click', async () => {
+  if (!port || !writer) { log('未连接', 'e'); return; }
+  let i = 0;
+  for (const p of PARAMS) {
+    sendParam(p.addr, +pInputs[p.addr].num.value);
+    await new Promise(r => setTimeout(r, 3));
+    i++;
+  }
+  log(`已下发 ${i} 个参数`);
+});
+
+$('btnReset').addEventListener('click', async () => {
+  if (!port || !writer) { log('未连接', 'e'); return; }
+  for (const p of PARAMS) {
+    const el = pInputs[p.addr];
+    el.range.value = DEFAULTS[p.addr];
+    el.num.value = DEFAULTS[p.addr];
+    el.num.classList.remove('dirty');
+    sendParam(p.addr, DEFAULTS[p.addr]);
+    await new Promise(r => setTimeout(r, 3));
+  }
+  log('已恢复默认值并下发');
+});
+
+for (let i = 0; i < 4; i++)
+  $('chk' + i).addEventListener('change', e => { enabled[i] = e.target.checked; });
+
+$('angleZero').addEventListener('change', () => { for (const c of ch) { c.sum=0; c.n=0; } });
+$('encZero').addEventListener('change',   () => { for (const c of ch) { c.sum=0; c.n=0; } });
+
+// ---------------------------------------------------------------- 虚拟仿真交互
+for (const b of document.querySelectorAll('#modebar .mb'))
+  b.addEventListener('click', () => setSimMode(b.dataset.mode));
+
+$('btnIdent').addEventListener('click', identify);
+$('btnValid').addEventListener('click', validateModel);
+
+$('btnVRun').addEventListener('click', () => {
+  if (vsim.running) {
+    vsim.running = false;
+    $('btnVRun').textContent = '开始';
+  } else {
+    if (Math.abs(vsim.theta) >= 89) vsimReset();   // 已倒下则复位
+    vsim.running = true;
+    $('btnVRun').textContent = '暂停';
+  }
+  updateVInfo();
+});
+
+$('btnVReset').addEventListener('click', () => {
+  vsimReset();
+  $('btnVRun').textContent = '开始';
+  simTrail = [];
+});
+
+$('btnVPush').addEventListener('click', async () => {
+  if (!port || !writer) { log('未连接', 'e'); return; }
+  const P = readPanelParams();
+  const map = { BAL_KP:0x01, BAL_KD:0x02, POS_KP:0x03, POS_KD:0x04, POS_KI:0x05 };
+  for (const [k, addr] of Object.entries(map)) {
+    sendParam(addr, P[k]);
+    await new Promise(r => setTimeout(r, 3));
+  }
+  log('已下发 PID 五项到设备');
+});
+
+// 进入虚拟模式时启用「下发PID」
+const _origSetMode = setSimMode;
+setSimMode = function(m) {
+  _origSetMode(m);
+  const en = (m === 'virtual') && !!port;
+  $('btnVPush').disabled = !en;
+  if (m === 'virtual') $('btnVRun').textContent = vsim.running ? '暂停' : '开始';
+};
+
+// ---------------------------------------------------------------- 启动
+buildParamPanel();
+buildModelPanel();
+vsimReset();
+log('上报：AA 55 | angle | enc1 | enc2 | pwm | state | rawAngle | chk | 0D 0A（16B, 115200, 20ms）');
+log('angle = 控制器实际采信值（已抑制尖峰）；rawAngle = 原始 ADC，仅用于诊断');
+log('下发：AA 55 01 | addr | dataH | dataL | chk | 0D 0A（9B）');
+if (!('serial' in navigator)) log('提示：此浏览器无 Web Serial，请用 Chrome/Edge。', 'e');
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
+

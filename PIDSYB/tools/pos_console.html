@@ -1,0 +1,2384 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>旋转倒立摆 · 位置环控制台</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --border:#30363d;
+    --text:#c9d1d9; --dim:#8b949e;
+    --c-ang:#4fc3f7; --c-pos:#ffb74d; --c-pwm:#ba68c8;
+    --ok:#3fb950; --warn:#d29922; --err:#f85149;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--bg); color:var(--text);
+    font:13px/1.5 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+
+  /* ---------------- 顶栏 ---------------- */
+  header{
+    background:var(--panel); border-bottom:1px solid var(--border);
+    padding:8px 12px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+    flex-shrink:0;
+  }
+  .grp{display:flex; gap:6px; align-items:center}
+  .grp>label{color:var(--dim); white-space:nowrap}
+  button{
+    background:#21262d; color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:5px 12px; cursor:pointer; font:inherit;
+  }
+  button:hover:not(:disabled){background:#30363d; border-color:#484f58}
+  button:disabled{opacity:.45; cursor:not-allowed}
+  button.primary{background:#1f6feb; border-color:#1f6feb; color:#fff}
+  button.primary:hover:not(:disabled){background:#388bfd}
+  button.danger{background:#b62324; border-color:#b62324; color:#fff}
+  button.danger:hover:not(:disabled){background:#da3633}
+  button.sm{padding:2px 9px; font-size:12px}
+  select,input{
+    background:#0d1117; color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:5px 8px; font:inherit;
+  }
+  input[type=number]{width:88px}
+  #status{
+    margin-left:auto; display:flex; gap:14px; align-items:center;
+    color:var(--dim); font-variant-numeric:tabular-nums; white-space:nowrap;
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:#484f58;display:inline-block}
+  .dot.on{background:var(--ok); box-shadow:0 0 6px var(--ok)}
+
+  /* ---------------- 布局 ---------------- */
+  main{flex:1; display:flex; min-height:0}
+
+  /* 左：动画 + 读数 + 波形 */
+  /* 窗口较小时（面板总高 > 视口）允许左栏纵向滚动，否则下方波形会被裁掉 */
+  #left{flex:1; display:flex; flex-direction:column; min-width:0; padding:8px; gap:8px; overflow-y:auto}
+
+  /* 动画视图 */
+  #animwrap{
+    flex:1.1; min-height:150px; position:relative;
+    background:#0b1017; border:1px solid var(--border); border-radius:8px;
+    overflow:hidden; display:flex;
+  }
+  #anim{display:block; width:100%; height:100%; cursor:grab}
+  #anim.dragging{cursor:grabbing}
+  #anim .lbl{position:absolute;top:6px;font-size:11px;color:var(--dim);pointer-events:none}
+  #animwrap .lg{
+    position:absolute; bottom:6px; left:12px; display:flex; gap:14px;
+    font-size:11px; pointer-events:none;
+  }
+  #animwrap .lg b{font-weight:600; font-variant-numeric:tabular-nums}
+  #dragtip{
+    position:absolute; top:6px; right:12px; font-size:11px;
+    color:var(--dim); pointer-events:none;
+  }
+
+  /* 读数卡片区 */
+  #cards{display:flex; gap:8px; flex-shrink:0}
+  .card{
+    flex:1; background:#11161d; border:1px solid var(--border);
+    border-radius:8px; padding:8px 12px; min-width:0;
+  }
+  .card h3{
+    margin:0 0 6px; font-size:11px; font-weight:600; color:var(--dim);
+    letter-spacing:.5px;
+  }
+  .card .row{
+    display:flex; justify-content:space-between; align-items:baseline;
+    gap:8px; margin-top:3px;
+  }
+  .card .row .lbl{color:var(--dim); font-size:11px}
+  .card .row .v{
+    font-variant-numeric:tabular-nums; font-size:15px; font-weight:600;
+    font-family:ui-monospace,Consolas,monospace;
+  }
+  .card .row .v.big{font-size:19px}
+  .card .row .u{color:var(--dim); font-size:10px; margin-left:2px}
+  .bar{
+    height:4px; background:#21262d; border-radius:2px; overflow:hidden;
+    margin-top:5px;
+  }
+  .bar>i{display:block; height:100%; width:0; transition:width .08s linear}
+
+  /* 波形 */
+  #wavewrap{
+    flex:0.8; min-height:110px; position:relative;
+    background:#11161d; border:1px solid var(--border); border-radius:8px;
+    overflow:hidden;
+  }
+  #wave{display:block; width:100%; height:100%}
+
+  /* 麦克风时域幅度 */
+  #micwrap{
+    flex:0.55; min-height:96px; position:relative;
+    background:#11161d; border:1px solid var(--border); border-radius:8px;
+    overflow:hidden;
+  }
+  #micwave{display:block; width:100%; height:100%}
+  #michdr{
+    position:absolute; top:6px; left:12px; right:12px;
+    display:flex; gap:14px; align-items:baseline; pointer-events:none;
+    font-size:11px; font-variant-numeric:tabular-nums;
+  }
+  #michdr .k{color:var(--dim)}
+  #michdr .x{margin-left:auto; color:var(--dim)}
+  #wavehdr{
+    position:absolute; top:6px; left:12px; right:12px;
+    display:flex; gap:18px; align-items:baseline; pointer-events:none;
+    font-size:11px; font-variant-numeric:tabular-nums;
+  }
+  #wavehdr .k{color:var(--dim)}
+  #wavehdr .x{margin-left:auto; color:var(--dim)}
+
+  /* 右：位置环控制台 */
+  #console{
+    width:340px; flex-shrink:0; background:var(--panel);
+    border-left:1px solid var(--border);
+    display:flex; flex-direction:column; min-height:0;
+  }
+  #console .ph{
+    padding:9px 12px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; gap:8px; flex-shrink:0;
+  }
+  #console .ph b{font-size:13px}
+  #console .ph .sp{margin-left:auto}
+  #cbody{overflow-y:auto; flex:1; padding:10px 12px}
+
+  .field{margin-bottom:12px}
+  .field label{
+    display:block; color:var(--dim); font-size:11px; margin-bottom:4px;
+  }
+  .field .line{display:flex; gap:6px; align-items:center}
+  .field .line input[type=number]{flex:1; width:auto; text-align:right;
+    font-family:ui-monospace,Consolas,monospace; font-size:14px}
+  .field .hint{color:#6e7681; font-size:10px; margin-top:3px}
+
+  .btns{display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:12px}
+  .btns.one{grid-template-columns:1fr}
+  .btns.three{grid-template-columns:1fr 1fr 1fr}
+  .btns button{padding:7px 6px; font-size:12px}
+
+  /* 控制按钮：比普通按钮更醒目 */
+  .ctl{
+    background:#1c2431; border-color:#39465c; font-weight:600;
+  }
+  .ctl:hover:not(:disabled){background:#243040; border-color:#4d5d77}
+  .ctl.danger2{background:#3a1d1d; border-color:#6b2b2b; color:#ffb3b3}
+  .ctl.danger2:hover:not(:disabled){background:#4d2323; border-color:#8a3838}
+  .ctl.active{background:#1f6feb; border-color:#1f6feb; color:#fff}
+
+  .sep{border-top:1px solid #21262d; margin:14px 0}
+  .sect{color:#6e7681; font-size:11px; letter-spacing:.5px; margin-bottom:8px}
+
+  /* 状态徽标 */
+  .badge{
+    display:inline-block; padding:1px 7px; border-radius:10px;
+    font-size:11px; font-weight:600;
+    background:#21262d; color:var(--dim);
+  }
+  .badge.bal{background:rgba(63,185,80,.15); color:var(--ok)}
+  .badge.sw{background:rgba(210,153,34,.15); color:var(--warn)}
+
+  /* 日志 */
+  #log{
+    color:var(--dim); font-size:11px; padding:0 12px 6px;
+    max-height:60px; overflow:auto; white-space:pre-wrap; flex-shrink:0;
+    border-top:1px solid var(--border);
+  }
+  #log .e{color:var(--err)}
+  #log .ok{color:var(--ok)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="grp">
+    <button id="btnConn" class="primary">连接串口</button>
+    <button id="btnPause" disabled>暂停</button>
+    <button id="btnClear" disabled>清空</button>
+    <button id="btnCsv" disabled>导出 CSV</button>
+  </div>
+
+  <div class="grp">
+    <label>波特率</label>
+    <select id="baud">
+      <option>9600</option>
+      <option>19200</option>
+      <option>38400</option>
+      <option>57600</option>
+      <option selected>115200</option>
+      <option>230400</option>
+    </select>
+  </div>
+
+  <div class="grp">
+    <label>角度零点</label><input id="angleZero" type="number" value="768" step="1">
+    <label>编码器零点</label><input id="encZero" type="number" value="10000" step="1">
+  </div>
+
+  <div class="grp">
+    <label>时间窗</label>
+    <select id="span">
+      <option value="5">5 s</option>
+      <option value="10" selected>10 s</option>
+      <option value="20">20 s</option>
+      <option value="30">30 s</option>
+      <option value="60">60 s</option>
+    </select>
+  </div>
+
+  <div class="grp" title="显示方向校准：勾选后该通道反向显示。用于让动画与实际机构一致。">
+    <label style="color:#6e7681">显示方向</label>
+    <label><input type="checkbox" id="chkInvArm"> 摆臂反向</label>
+    <label><input type="checkbox" id="chkInvPend"> 摆杆反向</label>
+  </div>
+
+  <div id="status">
+    <span><span id="dot" class="dot"></span> <span id="stTxt">未连接</span></span>
+    <span>状态 <span id="stState" class="badge">–</span></span>
+    <span>帧 <b id="stFrame">0</b></span>
+    <span><b id="stRate">0.0</b> Hz</span>
+    <span>错 <b id="stErr">0</b></span>
+  </div>
+</header>
+
+<main>
+  <div id="left">
+    <!-- ============ 动画视图（俯视 + 侧视） ============ -->
+    <div id="animwrap">
+      <canvas id="anim"></canvas>
+      <div id="dragtip">拖动橙色摆臂可设定目标位置</div>
+      <div class="lg">
+        <span>臂 <b id="lgArm" style="color:#81c784">–</b></span>
+        <span>杆 <b id="lgPend" style="color:#4fc3f7">–</b></span>
+        <span>目标 <b id="lgTgt" style="color:#ffb74d">–</b></span>
+      </div>
+    </div>
+
+    <!-- ============ 读数卡片 ============ -->
+    <div id="cards">
+      <!-- 角度环 -->
+      <div class="card">
+        <h3>角度环 · 摆杆</h3>
+        <div class="row">
+          <span class="lbl">当前倾角</span>
+          <span class="v big" id="rdAng" style="color:var(--c-ang)">–</span>
+        </div>
+        <div class="row">
+          <span class="lbl">目标（平衡点）</span>
+          <span class="v" id="rdAngTgt">–<span class="u">cnt</span></span>
+        </div>
+        <div class="row">
+          <span class="lbl">误差</span>
+          <span class="v" id="rdAngErr">–<span class="u">cnt</span></span>
+        </div>
+        <div class="row">
+          <span class="lbl">原始 / 滤波</span>
+          <span class="v" id="rdAngRaw" style="font-size:11px">–</span>
+        </div>
+        <div class="row">
+          <span class="lbl">α-β 速度</span>
+          <span class="v" id="rdAbV" style="font-size:12px">–<span class="u">cnt/拍</span></span>
+        </div>
+        <div class="bar"><i id="barAng" style="background:var(--c-ang)"></i></div>
+      </div>
+
+      <!-- 位置环 -->
+      <div class="card">
+        <h3>位置环 · 摆臂</h3>
+        <div class="row">
+          <span class="lbl">当前位置</span>
+          <span class="v big" id="rdPos" style="color:var(--c-pos)">–</span>
+        </div>
+        <div class="row">
+          <span class="lbl">目标（斜坡后）</span>
+          <span class="v" id="rdPosTgt">–<span class="u">cnt</span></span>
+        </div>
+        <div class="row">
+          <span class="lbl">误差</span>
+          <span class="v" id="rdPosErr">–<span class="u">cnt</span></span>
+        </div>
+        <div class="row">
+          <span class="lbl">手轮编码器（XH2）</span>
+          <span class="v" id="rdWheel" style="font-size:12px">–</span>
+        </div>
+        <div class="bar"><i id="barPos" style="background:var(--c-pos)"></i></div>
+      </div>
+
+      <!-- 输出 -->
+      <div class="card">
+        <h3>输出</h3>
+        <div class="row">
+          <span class="lbl">总 PWM</span>
+          <span class="v big" id="rdPwm" style="color:var(--c-pwm)">–</span>
+        </div>
+        <div class="row">
+          <span class="lbl">位置环输出</span>
+          <span class="v" id="rdPosPwm">–</span>
+        </div>
+        <div class="row">
+          <span class="lbl">角度环输出</span>
+          <span class="v" id="rdBalPwm">–</span>
+        </div>
+        <div class="row">
+          <span class="lbl">麦克风</span>
+          <span class="v" id="rdMic">–</span>
+        </div>
+        <div class="bar"><i id="barPwm" style="background:var(--c-pwm)"></i></div>
+      </div>
+    </div>
+
+    <!-- ============ 波形 ============ -->
+    <div id="wavewrap">
+      <canvas id="wave"></canvas>
+      <div id="wavehdr">
+        <span><span class="k">—</span> <span style="color:var(--c-ang)">摆杆倾角</span></span>
+        <span><span class="k">—</span> <span style="color:var(--c-pos)">摆臂位置</span></span>
+        <span><span class="k">—</span> <span style="color:var(--c-pwm)">PWM</span></span>
+        <span class="x" id="waveScale">–</span>
+      </div>
+    </div>
+
+    <!-- ============ 麦克风时域幅度 ============ -->
+    <div id="micwrap">
+      <canvas id="micwave"></canvas>
+      <div id="michdr">
+        <span><span class="k">—</span> <span style="color:#4db6ac" id="micTitle">麦克风音频波形（时域）</span></span>
+        <span><span class="k">DFT</span> <b id="micNow" style="color:#4db6ac">–</b></span>
+        <span><span class="k">窗口峰值</span> <b id="micPk">–</b></span>
+        <span class="x" id="micScale">–</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 位置环控制台 ============ -->
+  <aside id="console">
+    <div class="ph">
+      <b>位置环控制台</b>
+      <span class="sp"><button class="sm" id="btnGotoNow">跟随当前</button></span>
+    </div>
+
+    <div id="cbody">
+      <!-- ---------- 控制按钮组 ---------- -->
+      <div class="sect">控制</div>
+      <div class="btns three" style="margin-bottom:6px">
+        <button id="btnStart" class="ctl">① 起摆</button>
+        <button id="btnProfile" class="ctl">② 运动曲线</button>
+        <button id="btnReset" class="ctl danger2">⑤ 复位</button>
+      </div>
+      <div class="btns" style="margin-bottom:10px">
+        <button id="btnPosDec30" class="ctl">③ −30°</button>
+        <button id="btnPosInc30" class="ctl">④ +30°</button>
+      </div>
+      <!-- 四四拍（左 左 右 右）：MOVE_MODE=4 + CMD=4 确认；拍幅为独立参数 0x20 -->
+      <div class="btns one" style="margin-bottom:4px">
+        <button id="btnBeat" class="ctl">🎵 四四拍（左 左 右 右）</button>
+      </div>
+      <div class="line" style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+        <span style="color:var(--dim);font-size:11px;white-space:nowrap">拍幅</span>
+        <input id="beatAmp" type="number" value="44" step="5" style="flex:1;min-width:0;text-align:right">
+        <span id="beatAmpHint" style="color:#6e7681;font-size:10px;white-space:nowrap">≈15.2°</span>
+        <button class="sm" id="btnBeatAmpSend">下发</button>
+      </div>
+      <div class="hint" style="margin:0 0 10px;color:#6e7681;font-size:10px;line-height:1.45">
+        每拍一个「出去再回来」的鼓包：强·弱·次强·弱 = 1.00 / 0.40 / 0.70 / 0.40，<br>
+        前两拍同向（左）、后两拍反向（右）。
+      </div>
+      <!-- 手轮（摇杆）模式：MOVE_MODE=5 + 串口 CMD=4 确认 -->
+      <div class="btns one" style="margin-bottom:4px">
+        <button id="btnWheel" class="ctl">🖐 手轮模式（摇杆）</button>
+      </div>
+      <div class="hint" style="margin:0 0 10px;color:#6e7681;font-size:10px;line-height:1.45">
+        摆臂接 XH1（受驱动）· 手轮接 XH2（只读编码器）。<br>
+        进入后摆臂 1:1 跟随手轮；网页下发的位置目标会被固件每 5ms 覆盖。
+      </div>
+      <div class="btns" style="margin-bottom:10px">
+        <button id="btnFlingCfg" class="ctl">⚙ 甩杆参数</button>
+        <button id="btnAllParams" class="ctl">📋 全部参数</button>
+      </div>
+
+      <!-- 运动曲线面板（默认隐藏） -->
+      <div id="profilePanel" style="display:none;background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:9px;margin-bottom:10px">
+        <div class="sect" style="margin-bottom:7px">运动曲线设置</div>
+        <div class="field" style="margin-bottom:8px">
+          <label>波形</label>
+          <select id="profType" style="width:100%">
+            <option value="sine">正弦 · 平滑往复</option>
+            <option value="tri">三角 · 匀速往复</option>
+            <option value="lin">线性 · 单向到终点</option>
+          </select>
+        </div>
+        <div class="field" style="margin-bottom:8px">
+          <label>幅度（度）</label>
+          <input id="profAmp" type="number" value="30" step="5" style="width:100%">
+        </div>
+        <div class="field" style="margin-bottom:8px">
+          <label>周期（秒，线性波形下为总时长）</label>
+          <input id="profT" type="number" value="4" step="0.5" style="width:100%">
+        </div>
+        <div class="hint" id="profHint" style="margin-bottom:8px">起点 = 当前位置</div>
+        <div class="btns one">
+          <button id="btnProfRun" class="primary">开始运动</button>
+        </div>
+        <div class="btns one" style="margin-top:6px">
+          <button id="btnProfStop">停止运动</button>
+        </div>
+      </div>
+
+      <div class="sep"></div>
+      <!-- ---------- 目标位置 ---------- -->
+      <div class="sect">目标位置</div>
+
+      <div class="field">
+        <label>目标（编码器计数，1 圈 = 1040）</label>
+        <div class="line">
+          <input id="posTgt" type="number" value="0" step="10">
+          <button class="sm" id="btnSetPos">下发</button>
+        </div>
+        <div class="hint" id="posTgtHint">= 0.0°</div>
+      </div>
+
+      <div class="field">
+        <label>角度输入（度）</label>
+        <div class="line">
+          <input id="posDeg" type="number" value="0" step="1">
+          <button class="sm" id="btnSetDeg">下发</button>
+        </div>
+        <div class="hint">° → 计数：×1040/360</div>
+      </div>
+
+      <div class="btns three">
+        <button id="btnMinus10">−10°</button>
+        <button id="btnZero">回零</button>
+        <button id="btnPlus10">+10°</button>
+      </div>
+      <div class="btns three">
+        <button id="btnMinus90">−90°</button>
+        <button id="btnNow">当前</button>
+        <button id="btnPlus90">+90°</button>
+      </div>
+      <div class="btns">
+        <button id="btnMinus360">−1 圈</button>
+        <button id="btnPlus360">+1 圈</button>
+      </div>
+
+      <div class="sep"></div>
+
+      <!-- ---------- 甩杆参数（默认隐藏） ---------- -->
+      <div id="flingPanel" style="display:none;background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:9px;margin-bottom:10px">
+        <div class="sect" style="margin-bottom:7px">甩杆参数（实时生效）</div>
+        <div class="field" style="margin-bottom:7px">
+          <label>甩杆位移 STEP（计数，1040 = 1 圈）</label>
+          <div class="line"><input id="flStep" type="number" value="341" step="10" style="width:100%"></div>
+          <div class="hint" id="flStepHint">= 118.0°</div>
+        </div>
+        <div class="field" style="margin-bottom:7px">
+          <label>PD 增益（左 KP · 右 KD）</label>
+          <div class="line">
+            <input id="flKp" type="number" value="90"  step="5" placeholder="KP" style="width:50%">
+            <input id="flKd" type="number" value="180" step="5" placeholder="KD" style="width:50%">
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:7px">
+          <label>回杆 / 减速（计数）</label>
+          <div class="line">
+            <input id="flBack"  type="number" value="80" step="5" placeholder="BACK"  style="width:50%">
+            <input id="flDecel" type="number" value="30" step="5" placeholder="DECEL" style="width:50%">
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:7px">
+          <label>到位窗口 / 单相超时</label>
+          <div class="line">
+            <input id="flWin"   type="number" value="15" step="1"  placeholder="WIN"   style="width:50%">
+            <input id="flTicks" type="number" value="60" step="10" placeholder="TICKS" style="width:50%">
+          </div>
+          <div class="hint">左：计数（15）· 右：×5ms（60 = 300ms）</div>
+        </div>
+        <div class="btns">
+          <button id="btnFlingSend" class="primary">下发甩杆参数</button>
+          <button id="btnFlingReset">恢复默认</button>
+        </div>
+      </div>
+
+      <!-- ---------- 麦克风单频检测（LED3） ---------- -->
+      <div class="sect">麦克风单频检测（LED3）</div>
+      <div class="field" style="margin-bottom:7px">
+        <label>目标频率（Hz，1 ~ 7800）</label>
+        <div class="line"><input id="micFreq" type="number" value="1000" step="10" style="width:100%"></div>
+        <div class="hint" id="micFreqHint">分辨率 0.24Hz · 主瓣宽 30.5Hz</div>
+      </div>
+      <div class="field" style="margin-bottom:7px">
+        <label>幅值阈值 / 保持时间</label>
+        <div class="line">
+          <input id="micTh"   type="number" value="500" step="100" placeholder="TH"   style="width:50%">
+          <input id="micHold" type="number" value="20"  step="5"   placeholder="HOLD" style="width:50%">
+        </div>
+        <div class="hint">左：幅值≥此值时 LED3 亮（满幅≈31000）右：×5ms（20 = 100ms）</div>
+      </div>
+      <div class="btns" style="margin-bottom:10px">
+        <button id="btnMicSend" class="primary">下发麦克风参数</button>
+      </div>
+
+      <!-- ---------- α-β 滤波器 ---------- -->
+      <div class="sect">α-β 滤波器（角度环 D 项）</div>
+      <div class="field" style="margin-bottom:7px">
+        <label>α（Q8，153 = 0.598）</label>
+        <div class="line">
+          <input id="abA" type="range" min="2" max="220" step="1" value="153" style="width:100%">
+        </div>
+        <div class="hint" id="abAHint">α = 0.199 · β = 0.0234</div>
+      </div>
+      <div class="field" style="margin-bottom:7px">
+        <label>β（Q8，65 = 0.254）</label>
+        <div class="line">
+          <input id="abB" type="number" value="65" step="1" min="1" max="255" style="width:100%">
+        </div>
+        <div class="hint">约定 β = α²/(2-α) 使双极点重合（临界阻尼）</div>
+      </div>
+      <div class="btns" style="margin-bottom:10px">
+        <button id="btnAbSync">按 α 算 β</button>
+        <button id="btnAbSend" class="primary">下发 α/β</button>
+      </div>
+
+      <!-- ---------- 全部可调参数（默认隐藏） ---------- -->
+      <div id="allParamPanel" style="display:none;background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:9px;margin-bottom:10px">
+        <div class="sect" style="margin-bottom:4px">全部可调参数（实时生效）</div>
+        <div class="hint" style="margin-bottom:6px">
+          点每行的 ↓ 单独下发，或底部「下发全部」。地址为串口帧第 4 字节。
+        </div>
+        <div id="allParamBody"></div>
+        <div class="btns" style="margin-top:9px">
+          <button id="btnAllSend" class="primary">下发全部</button>
+          <button id="btnAllDefault">恢复默认</button>
+        </div>
+      </div>
+
+      <!-- ---------- 实际位置 ---------- -->
+      <div class="sect">实际位置（只读）</div>
+      <div class="field">
+        <label>当前位置</label>
+        <div class="line">
+          <input id="curPos" type="number" value="0" readonly style="opacity:.7">
+        </div>
+        <div class="hint" id="curPosHint">–</div>
+      </div>
+
+      <div class="sep"></div>
+
+      <!-- ---------- 平衡点 ---------- -->
+      <div class="sect">角度环平衡点</div>
+      <div class="field">
+        <label>平衡点（ADC 计数）</label>
+        <div class="line">
+          <input id="balTgt" type="number" value="768" step="1">
+          <button class="sm" id="btnSetBal">下发</button>
+        </div>
+        <div class="line" style="margin-top:4px">
+          <button class="sm" id="btnBalNow" style="width:100%">⭐ 当前设为平衡点</button>
+        </div>
+        <div class="hint">摆杆竖直时 ADC 读数</div>
+      </div>
+
+      <div class="sep"></div>
+
+      <!-- ---------- 状态 ---------- -->
+      <div class="sect">运行状态</div>
+      <div class="field">
+        <div class="row" style="display:flex;justify-content:space-between">
+          <span style="color:var(--dim);font-size:11px">状态机</span>
+          <span id="cState" class="badge">–</span>
+        </div>
+        <div class="row" style="display:flex;justify-content:space-between;margin-top:4px">
+          <span style="color:var(--dim);font-size:11px">位置环误差</span>
+          <span id="cPosErr" style="font-family:ui-monospace,Consolas,monospace">–</span>
+        </div>
+        <div class="row" style="display:flex;justify-content:space-between;margin-top:4px">
+          <span style="color:var(--dim);font-size:11px">目标达成</span>
+          <span id="cInPos" class="badge">–</span>
+        </div>
+        <div class="row" style="display:flex;justify-content:space-between;margin-top:4px">
+          <span style="color:var(--dim);font-size:11px">运动模式</span>
+          <span id="cMode" class="badge">–</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<div id="log"></div>
+
+<script>
+"use strict";
+
+// ============================================================================
+// 上报帧（设备 -> PC），102 字节，115200 8N1，每 20ms 一帧：
+//   0xAA 0x55 | angle(2B) | enc1(2B) | enc2(2B) | pwm(2B,s) | state(1B)
+//             | rawAngle(2B) | posTgt(2B,s) | posPwm(2B,s) | micLvl(2B)
+//             | abV(2B,s) | audio(39×2B,s) | chk(1B) | 0D 0A
+//   chk = 字节 2 ~ 98 的异或和
+//   audio = 麦克风时域采样（15.625kSPS ÷ 8 = 1953.125 Hz，约 20ms/帧）
+//
+// 下发帧（PC -> 设备），9 字节：
+//   0xAA 0x55 0x01 | addr | dataH | dataL | chk | 0x0D 0x0A
+//   chk = 0x01 ^ addr ^ dataH ^ dataL
+//
+// 参数地址：
+//   0x01 BAL_KP          0x02 BAL_KD
+//   0x03 POS_KP          0x04 POS_KD          0x05 POS_KI
+//   0x06 BAL_KP_CATCH    0x07 BAL_KD_CATCH
+//   0x08 POS_KP_CATCH    0x09 POS_KD_CATCH
+//   0x0A SWING_GAIN      0x0B SWING_DAMP      0x0C SWING_QUARTER
+//   0x0D POS_SLEW_MAX    0x0E BAL_TARGET      0x0F POS_TARGET
+//   0x10 CMD             0x11 FLING_STEP      0x12 FLING_KP
+//   0x13 FLING_KD        0x14 FLING_BACK      0x15 FLING_DECEL
+//   0x16 FLING_WIN       0x17 FLING_PTICKS
+//   0x18 MIC_FREQ        0x19 MIC_TH          0x1A MIC_HOLD
+//   0x1B AB_ALPHA (Q8)   0x1C AB_BETA (Q8)
+//   0x1D MOVE_AMP        0x1E MOVE_PERIOD     0x1F MOVE_MODE
+//   0x20 BEAT_AMP（四四拍单拍峰值，独立于 MOVE_AMP）
+//
+// CMD（写 0x10）：1=启动/起摆  2=停止  3=软复位  4=确认执行模式(arm)
+//                 5=取消模式(disarm)
+// 遥测第 11 字节（索引 10）：低 4 位 = state；bit5 = 手轮模式选中；
+//                            bit4 = 模式已确认（arm）
+// ============================================================================
+const FRAME_LEN  = 102;
+const NOMINAL_HZ = 50;
+const AUD_N      = 39;          // 每帧音频样点数
+const AUD_FS     = 15625 / 8;   // 1953.125 Hz（固件 ÷8 抽取）
+
+const ADDR_BAL_TARGET = 0x0E;
+const ADDR_POS_TARGET = 0x0F;
+
+// 编码器：1 圈 = 1040 计数（13线 × 4倍频 × 20减速比）
+const ENC_PER_REV = 1040;
+// 角度：下垂→竖直的实测跨度（224 → 3000，即 2776 计数 = 180°）
+// 角度标度：摆杆从最上（竖直）到最下（下垂）= 180°，实测只跨越 534 计数
+//   ⚠ 旧值是 2776（接近旧标度的 3003），换标度后必须同步改这里，
+//     否则网页显示的角度（度）与固件内部的计数阈值不一致，调参会完全跑偏。
+//   1 计数 = 180/534 = 0.337°，ADC 1 LSB（4 计数）= 1.348°
+const ANG_PER_180 = 534;
+
+// PWM 满幅（BAL_MODE 下 EFF_PWM_MAX = 5175）
+const PWM_MAX = 5175;
+// 位置环限幅 = PWM_MAX/2
+const POS_PWM_MAX = 2587;
+
+// 麦克风点亮阈值与目标频率（与固件默认值一致，下发后同步更新，仅用于界面高亮）
+let MIC_TH   = 500;
+let MIC_FREQ = 1000;
+// 采样率 fs = 15.625kHz，512 点相干积分 → 主瓣宽 fs/N = 30.5Hz
+const MIC_FS = 15625;
+
+// ---------------------------------------------------------------- 数据缓冲
+const MAX_POINTS = 4000;
+const MAX_AUDIO  = 200000;   // 音频滚动缓冲 ≈100 s @1953 Hz
+const ch = {
+  ang:    { data: [] },   // 摆杆倾角（计数，已减平衡点）
+  pos:    { data: [] },   // 摆臂位置（计数，已减零点）
+  pwm:    { data: [] },   // 总 PWM
+  mic:    { data: [] },   // 麦克风音频时域采样（1953 Hz）
+  micLvl: { data: [] },   // 麦克风单频 DFT 幅值（每帧一个，供 CSV）
+};
+
+let frameCount = 0, errCount = 0, chkFail = 0;
+let paused = false;
+let lastFrameTime = 0, rateEma = 0;
+let hasData = false;   // 是否已收到过至少一帧
+
+// 最新一帧
+let latest = {
+  angle: 0, enc1: 0, enc2: 0, pwm: 0, state: 0,
+  rawAngle: 0, posTgt: 0, posPwm: 0, micLvl: 0, abV: 0,
+  wheelSel: 0, armed: 0, mode: 0,
+  audio: new Int16Array(AUD_N),
+};
+
+// ---------------------------------------------------------------- 串口
+let port = null, reader = null, writer = null, keepReading = false;
+let rxBuf = new Uint8Array(0);
+
+const $ = id => document.getElementById(id);
+const logEl = $('log');
+function log(msg, cls) {
+  const t = new Date().toLocaleTimeString('zh-CN', {hour12:false});
+  const line = document.createElement('div');
+  if (cls) line.className = cls;
+  line.textContent = `[${t}] ${msg}`;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+  while (logEl.childElementCount > 30) logEl.removeChild(logEl.firstChild);
+}
+
+// ---------------------------------------------------------------- 帧解析
+function findHeader(b) {
+  for (let i = 0; i + 1 < b.length; i++)
+    if (b[i] === 0xAA && b[i+1] === 0x55) return i;
+  return -1;
+}
+
+function feed(bytes) {
+  const merged = new Uint8Array(rxBuf.length + bytes.length);
+  merged.set(rxBuf, 0);
+  merged.set(bytes, rxBuf.length);
+  rxBuf = merged;
+
+  while (rxBuf.length >= FRAME_LEN) {
+    const h = findHeader(rxBuf);
+    if (h < 0) { rxBuf = rxBuf.slice(Math.max(0, rxBuf.length - 1)); break; }
+    if (h > 0) { rxBuf = rxBuf.slice(h); if (rxBuf.length < FRAME_LEN) break; }
+
+    // 帧尾 0D 0A（固定位置 100/101）
+    if (rxBuf[100] !== 0x0D || rxBuf[101] !== 0x0A) {
+      errCount++; rxBuf = rxBuf.slice(1); continue;
+    }
+    // 校验和：字节 2~98
+    let cs = 0;
+    for (let i = 2; i <= 98; i++) cs ^= rxBuf[i];
+    if (cs !== rxBuf[99]) { chkFail++; rxBuf = rxBuf.slice(1); continue; }
+
+    const u16 = o => (rxBuf[o] << 8) | rxBuf[o+1];
+    const s16 = o => { const v = u16(o); return v >= 0x8000 ? v - 0x10000 : v; };
+
+    latest.angle    = u16(2) & 0x0FFF;
+    latest.enc1     = u16(4);
+    latest.enc2     = u16(6);
+    latest.pwm      = s16(8);
+    latest.state    = rxBuf[10] & 0x0F;
+    latest.wheelSel = (rxBuf[10] >> 5) & 0x01;   // 固件 MOVE_MODE == 5
+    latest.armed    = (rxBuf[10] >> 4) & 0x01;   // 模式已确认（arm）
+    latest.mode     = (rxBuf[11] >> 4) & 0x07;   // 当前预选模式号 0~5
+    latest.rawAngle = ((rxBuf[11] & 0x0F) << 8) | rxBuf[12];
+    latest.posTgt   = s16(13);
+    latest.posPwm   = s16(15);
+    latest.micLvl   = u16(17);
+    latest.abV      = s16(19);
+
+    // 音频时域采样（大端 16-bit 有符号）
+    for (let k = 0; k < AUD_N; k++) {
+      const o = 21 + k * 2;
+      const v = (rxBuf[o] << 8) | rxBuf[o + 1];
+      latest.audio[k] = v >= 0x8000 ? v - 0x10000 : v;
+    }
+
+    rxBuf = rxBuf.slice(FRAME_LEN);
+    onFrame();
+  }
+  if (rxBuf.length > 8192) rxBuf = rxBuf.slice(-128);
+}
+
+function onFrame() {
+  frameCount++;
+  hasData = true;
+
+  const az = +$('angleZero').value || 0;
+  const ez = +$('encZero').value || 0;
+
+  const angCnt = latest.angle - az;      // 相对平衡点的倾角（计数）
+  const posCnt = latest.enc1  - ez;      // 相对机械零点的摆臂位置（计数）
+
+  if (!paused) {
+    push(ch.ang, angCnt);
+    push(ch.pos, posCnt);
+    push(ch.pwm, latest.pwm);
+    push(ch.micLvl, latest.micLvl);
+    pushAudio(latest.audio);        // 每帧 39 个音频样点
+  }
+
+  // 采样率
+  const now = performance.now();
+  if (lastFrameTime) {
+    const dt = now - lastFrameTime;
+    if (dt > 0 && dt < 500) {
+      const inst = 1000 / dt;
+      rateEma = rateEma ? rateEma * 0.9 + inst * 0.1 : inst;
+    }
+  }
+  lastFrameTime = now;
+}
+
+function push(c, v) {
+  c.data.push(v);
+  if (c.data.length > MAX_POINTS) c.data.splice(0, c.data.length - MAX_POINTS);
+}
+
+function pushAudio(arr) {
+  const d = ch.mic.data;
+  for (let k = 0; k < arr.length; k++) d.push(arr[k]);
+  if (d.length > MAX_AUDIO) d.splice(0, d.length - MAX_AUDIO);
+}
+
+// ---------------------------------------------------------------- 读数更新
+const STATE_NAMES = ['IDLE','SWING','BALANCE'];
+const MODE_NAMES  = ['纯稳摆','正弦','三角','线性','四四拍','手轮'];
+
+function updateReadouts() {
+  if (!hasData) return;      // 未收到数据前保持占位符
+
+  const az = +$('angleZero').value || 0;
+  const ez = +$('encZero').value || 0;
+
+  const angCnt = latest.angle - az;
+  const posCnt = latest.enc1  - ez;
+  // 显示角度按实际方向取反（与动画、图例一致）
+  const angDeg = SIGN_PEND * angCnt * 180 / ANG_PER_180;
+  const posDeg = SIGN_ARM  * posCnt * 360 / ENC_PER_REV;
+
+  const posErr = posCnt - latest.posTgt;
+  const balPwm = latest.pwm + latest.posPwm;   // pwm = bal - pos  =>  bal = pwm + pos
+
+  // ---- 角度环卡片 ----
+  $('rdAng').textContent = angDeg.toFixed(2) + '°';
+  $('rdAng').style.color =
+    Math.abs(angDeg) < 3 ? 'var(--ok)' :
+    Math.abs(angDeg) < 10 ? 'var(--warn)' : 'var(--err)';
+  $('rdAngTgt').innerHTML = az + '<span class="u">cnt</span>';
+  $('rdAngErr').innerHTML = angCnt + '<span class="u">cnt</span>';
+
+  // 原始 vs 滤波对比：rawAngle 未经 α-β，angle 是控制实际采信值
+  const rawCnt = latest.rawAngle - az;
+  const dCnt = latest.angle - latest.rawAngle;
+  $('rdAngRaw').innerHTML =
+    `${latest.rawAngle} / ${latest.angle}` +
+    `<span class="u">  Δ${dCnt >= 0 ? '+' : ''}${dCnt}</span>`;
+  // 滤波滞后大或发散时变色提醒
+  $('rdAngRaw').style.color =
+    Math.abs(dCnt) < 60 ? 'var(--text)' : 'var(--warn)';
+
+  // α-β 速度估计（计数/5ms）
+  $('rdAbV').innerHTML = latest.abV + '<span class="u">cnt/拍</span>';
+  $('rdAbV').style.color =
+    Math.abs(latest.abV) < 5 ? 'var(--ok)' :
+    Math.abs(latest.abV) < 20 ? 'var(--warn)' : 'var(--err)';
+
+  // 窗口内噪声统计（评估滤波器效果，只在有数据时算）
+  if (ch.ang.data.length > 40) {
+    const n = ch.ang.data.length;
+    const seg = ch.ang.data.slice(Math.max(0, n - 100));
+    let m = 0; for (const v of seg) m += v;
+    m /= seg.length;
+    let s = 0; for (const v of seg) s += (v - m) * (v - m);
+    s = Math.sqrt(s / seg.length);
+    $('rdAngErr').innerHTML =
+      angCnt + '<span class="u">cnt</span>' +
+      ` <span class="u">σ${s.toFixed(1)}</span>`;
+  }
+
+  $('barAng').style.width =
+    Math.min(100, Math.abs(angCnt) / 800 * 100) + '%';
+  $('barAng').style.background =
+    Math.abs(angCnt) < 100 ? 'var(--ok)' : Math.abs(angCnt) < 300 ? 'var(--warn)' : 'var(--err)';
+
+  // ---- 位置环卡片 ----
+  $('rdPos').textContent = posDeg.toFixed(1) + '°';
+  $('rdPosTgt').innerHTML = latest.posTgt + '<span class="u">cnt</span>';
+  $('rdPosErr').innerHTML = posErr + '<span class="u">cnt</span>';
+  $('rdWheel').textContent = latest.enc2;   // 手轮编码器原值（XH2）
+  $('rdPosErr').style.color =
+    Math.abs(posErr) < 5 ? 'var(--ok)' : Math.abs(posErr) < 40 ? 'var(--warn)' : 'var(--err)';
+  $('barPos').style.width = Math.min(100, Math.abs(posErr) / 500 * 100) + '%';
+  $('barPos').style.background =
+    Math.abs(posErr) < 20 ? 'var(--ok)' : Math.abs(posErr) < 100 ? 'var(--warn)' : 'var(--err)';
+
+  // ---- 输出卡片 ----
+  $('rdPwm').textContent = latest.pwm;
+  $('rdPosPwm').textContent = latest.posPwm;
+  $('rdBalPwm').textContent = balPwm;
+  // 麦克风幅值：满幅≈31000（512 点单频 DFT）
+  $('rdMic').textContent =
+    `${MIC_FREQ}Hz  ${latest.micLvl}` + (latest.micLvl >= MIC_TH ? ' ●' : '');
+  $('rdMic').style.color = latest.micLvl >= MIC_TH ? 'var(--ok)' : 'var(--text)';
+  $('barPwm').style.width =
+    Math.min(100, Math.abs(latest.pwm) / PWM_MAX * 100) + '%';
+  $('barPwm').style.background =
+    Math.abs(latest.pwm) < PWM_MAX * 0.8 ? 'var(--c-pwm)' : 'var(--err)';
+
+  // ---- 控制台状态 ----
+  const st = STATE_NAMES[latest.state] ?? ('0x' + latest.state.toString(16));
+  $('stState').textContent = st;
+  $('stState').className = 'badge' + (latest.state === 2 ? ' bal' : latest.state === 1 ? ' sw' : '');
+  $('cState').textContent = st;
+  $('cState').className = 'badge' + (latest.state === 2 ? ' bal' : latest.state === 1 ? ' sw' : '');
+
+  $('cPosErr').textContent = posErr + ' cnt';
+  $('cPosErr').style.color = Math.abs(posErr) < 5 ? 'var(--ok)' : 'var(--text)';
+
+  const inPos = Math.abs(posErr) <= 5;
+  $('cInPos').textContent = inPos ? '已到位' : '调整中';
+  $('cInPos').className = 'badge' + (inPos ? ' bal' : ' sw');
+
+  // ---- 运动模式（四四拍 / 手轮 / 曲线 / 纯稳摆）----
+  const mName  = MODE_NAMES[latest.mode] ?? ('模式' + latest.mode);
+  const wOn    = latest.state === 2 && latest.mode === 5 && latest.armed === 1;
+  const bOn    = latest.state === 2 && latest.mode === 4 && latest.armed === 1;
+  $('cMode').textContent = latest.mode === 0
+    ? '纯稳摆'
+    : mName + (latest.armed ? ' · 运行中' : ' · 待确认');
+  $('cMode').className = 'badge' + (latest.armed ? ' bal' : (latest.mode ? ' sw' : ''));
+
+  $('btnWheel').classList.toggle('active', wOn);
+  $('btnWheel').textContent = wOn ? '🖐 手轮模式：跟随中（点击退出）' : '🖐 手轮模式（摇杆）';
+  $('btnBeat').classList.toggle('active', bOn);
+  $('btnBeat').textContent = bOn ? '🎵 四四拍：运行中（点击退出）' : '🎵 四四拍（左 左 右 右）';
+
+  // 只读框同步（未聚焦时）
+  if (document.activeElement !== $('curPos')) $('curPos').value = posCnt;
+  $('curPosHint').textContent = `${posCnt} 计数 = ${posDeg.toFixed(1)}°`;
+
+  // 目标角度提示
+  const tgtDeg = latest.posTgt * 360 / ENC_PER_REV;
+  $('posTgtHint').textContent = `= ${tgtDeg.toFixed(1)}°（当前误差 ${posErr} 计数）`;
+
+  // 顶部状态
+  $('stFrame').textContent = frameCount;
+  $('stErr').textContent   = errCount + chkFail;
+  $('stRate').textContent  = rateEma.toFixed(1);
+}
+
+// ---------------------------------------------------------------- 显示方向
+//   摆臂 / 摆杆 的显示方向可独立校准（勾选 = 反向）。
+//   为什么做成可切换而不是写死符号：
+//     方向由「电机接线 + 编码器计数方向 + 电位器安装方向」共同决定，
+//     只能靠肉眼对照实物确认，写死容易改错一轮反一轮。
+//   校准方法：手动把摆臂往顺时针推，看动画里绿色摆臂是否也顺时针；
+//     不一致就勾「摆臂反向」。同理校准摆杆。
+//   设置保存在 localStorage，刷新页面不丢。
+const SIGN_KEY = 'pendulum_sign_v1';
+let signState = { arm: 1, pend: 1 };
+try {
+  const s = JSON.parse(localStorage.getItem(SIGN_KEY) || 'null');
+  if (s && (s.arm === 1 || s.arm === -1) && (s.pend === 1 || s.pend === -1)) signState = s;
+} catch (_) {}
+
+let SIGN_ARM  = signState.arm;
+let SIGN_PEND = signState.pend;
+
+function applySignState() {
+  SIGN_ARM  = signState.arm;
+  SIGN_PEND = signState.pend;
+  // 方向变了，连续角度要重新初始化，否则会从旧基准缓慢爬过去
+  armDegCont = null;
+  tgtDegCont = null;
+  try { localStorage.setItem(SIGN_KEY, JSON.stringify(signState)); } catch (_) {}
+}
+
+// ---------------------------------------------------------------- 动画视图
+//   左：俯视图（摆臂旋转 + 摆杆水平投影）
+//   右：侧视图（摆杆倾角）
+//   拖动左边视图中的摆臂可实时设定位置环目标
+const animTrail = [];
+let dragArm = false;          // 是否正在拖动摆臂
+let dragPrevTgt = 0;          // 拖动开始前的目标（供取消用）
+let animGeom = null;          // 当前几何（供鼠标换算角度）
+let armDegCont = null;        // 摆臂连续累计角度（unwrap 用）
+let tgtDegCont = null;        // 目标连续累计角度（unwrap 用）
+
+function drawAnim() {
+  const cv = $('anim');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = cv.getBoundingClientRect();
+  const w = Math.max(1, Math.floor(rect.width));
+  const h = Math.max(1, Math.floor(rect.height));
+  if (cv.width !== Math.round(w*dpr) || cv.height !== Math.round(h*dpr)) {
+    cv.width  = Math.round(w*dpr);
+    cv.height = Math.round(h*dpr);
+  }
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.fillStyle = '#0b1017';
+  g.fillRect(0, 0, w, h);
+
+  // ---- 当前量与目标量 ----
+  const az = +$('angleZero').value || 0;
+  const ez = +$('encZero').value || 0;
+  const angCnt  = hasData ? (latest.angle - az) : 0;
+  const posCnt  = hasData ? (latest.enc1  - ez) : 0;
+  const tgtCnt  = hasData ? latest.posTgt : 0;
+
+  // ---- 符号：显示方向必须与实际机构一致 ----
+  //   实测两路都需要取反（机械安装方向与传感器计数方向相反）。
+  //   这两个常量在文件级定义（SIGN_ARM / SIGN_PEND），拖动换算也用它。
+
+  // 摆杆倾角（0 = 竖直向上）
+  let pendDeg = SIGN_PEND * angCnt * 180 / ANG_PER_180;
+  pendDeg = Math.max(-180, Math.min(180, pendDeg));
+
+  // ---- 摆臂角度：连续追踪，避免 ±180 处跳变 ----
+  //   【为何需要 unwrap】编码器计数算出的角度会持续增长（720°、1080°…），
+  //   若每次都归一化到 [-180,180]，跨过 ±180 时会出现「-180 → 0 → +180」
+  //   的假象（即动画反向绕一整圈），与实际的「就近跨过 ±180」不符。
+  //   这里用【累计连续值】：每次只取与上一帧的最小角度差（模 360 归一到
+  //   [-180,180]），再加到累计值上，因此跨越边界时自然走最短路径。
+  const armRaw = SIGN_ARM * posCnt * 360 / ENC_PER_REV;
+  const tgtRaw = SIGN_ARM * tgtCnt * 360 / ENC_PER_REV;
+
+  armDegCont = unwrapDeg(armRaw, armDegCont);
+  tgtDegCont = unwrapDeg(tgtRaw, tgtDegCont);
+
+  // 绘图用连续值（sin/cos 自动处理周期性，不会跳变）
+  const armDeg = armDegCont;
+  const tgtDeg = tgtDegCont;
+
+  // 图例显示档位归一到 [-180,180]，便于阅读
+  const armDegDisp = wrap180(armDeg);
+  const tgtDegDisp = wrap180(tgtDeg);
+
+  const halfW = w / 2;
+  const cx = halfW / 2;
+  const cy = h / 2 + 4;
+  const R  = Math.min(halfW * 0.62, h * 0.36);
+
+  animGeom = { cx, cy, R };
+
+  drawTopView(g, cx, cy, R, armDeg, tgtDeg, pendDeg);
+  drawSideView(g, halfW + cx, cy, R, pendDeg);
+
+  // ---- 图例 ----
+  $('lgArm').textContent  = armDegDisp.toFixed(1) + '°';
+  $('lgPend').textContent = pendDeg.toFixed(2) + '°';
+  $('lgTgt').textContent  = tgtDegDisp.toFixed(1) + '°';
+
+  // 记录轨迹
+  if (!paused && hasData) {
+    const rad = armDeg * Math.PI / 180;
+    animTrail.push([cx + R * Math.cos(rad), cy + R * Math.sin(rad)]);
+    if (animTrail.length > 80) animTrail.shift();
+  }
+}
+
+// 把任意角度归一到 [-180, 180]
+function wrap180(d) {
+  d = d % 360;
+  if (d >  180) d -= 360;
+  if (d < -180) d += 360;
+  return d;
+}
+
+// 连续展开：给定新原始角度与上一次的累计值，返回新的累计值。
+//   差值模 360 归一到 [-180,180]，所以跨越 ±180 时走最短路径。
+function unwrapDeg(newRaw, prevCont) {
+  if (prevCont === null || prevCont === undefined) return newRaw;
+  let d = newRaw - prevCont;
+  d = d % 360;
+  if (d >  180) d -= 360;
+  if (d < -180) d += 360;
+  return prevCont + d;
+}
+
+function drawTopView(g, cx, cy, R, armDeg, tgtDeg, pendDeg) {
+  const rad = armDeg * Math.PI / 180;
+
+  // 参考圆 + 十字
+  g.strokeStyle = '#1f2630'; g.lineWidth = 1;
+  g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.stroke();
+  g.strokeStyle = '#161d26';
+  g.beginPath();
+  g.moveTo(cx - R - 8, cy); g.lineTo(cx + R + 8, cy);
+  g.moveTo(cx, cy - R - 8); g.lineTo(cx, cy + R + 8);
+  g.stroke();
+
+  // ---- 目标位置指示（虚线半径 + 弧）----
+  const trad = tgtDeg * Math.PI / 180;
+  g.strokeStyle = 'rgba(255,183,77,.45)';
+  g.lineWidth = 1.5;
+  g.setLineDash([4, 4]);
+  g.beginPath();
+  g.moveTo(cx, cy);
+  g.lineTo(cx + R * Math.cos(trad), cy + R * Math.sin(trad));
+  g.stroke();
+  g.setLineDash([]);
+
+  // 目标标记（橙色小三角）
+  const tx = cx + (R + 9) * Math.cos(trad);
+  const ty = cy + (R + 9) * Math.sin(trad);
+  g.fillStyle = '#ffb74d';
+  g.beginPath();
+  g.arc(tx, ty, 3.2, 0, Math.PI * 2);
+  g.fill();
+
+  const tipX = cx + R * Math.cos(rad);
+  const tipY = cy + R * Math.sin(rad);
+
+  // ---- 摆臂轨迹 ----
+  for (let i = 0; i < animTrail.length; i++) {
+    const a = (i + 1) / animTrail.length;
+    g.fillStyle = `rgba(129,199,132,${a * 0.25})`;
+    g.beginPath();
+    g.arc(animTrail[i][0], animTrail[i][1], 1.5, 0, Math.PI * 2);
+    g.fill();
+  }
+
+  // ---- 摆臂 ----
+  g.strokeStyle = dragArm ? '#a5d6a7' : '#81c784';
+  g.lineWidth = 5;
+  g.lineCap = 'round';
+  g.beginPath();
+  g.moveTo(cx, cy);
+  g.lineTo(tipX, tipY);
+  g.stroke();
+
+  // ---- 摆杆（水平投影）----
+  const proj = Math.sin(pendDeg * Math.PI / 180) * R * 0.8;
+  g.strokeStyle = Math.abs(pendDeg) < 5 ? '#3fb950' : '#4fc3f7';
+  g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(tipX, tipY);
+  g.lineTo(tipX + proj * Math.cos(rad), tipY + proj * Math.sin(rad));
+  g.stroke();
+
+  // ---- 支点 ----
+  g.fillStyle = '#30363d';
+  g.beginPath(); g.arc(cx, cy, 5, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#8b949e';
+  g.beginPath(); g.arc(cx, cy, 2.2, 0, Math.PI * 2); g.fill();
+
+  // ---- 末端铰点（拖动把手）----
+  g.fillStyle = dragArm ? '#ffffff' : '#c9d1d9';
+  g.beginPath(); g.arc(tipX, tipY, dragArm ? 5 : 3.5, 0, Math.PI * 2); g.fill();
+  if (dragArm) {
+    g.strokeStyle = 'rgba(255,255,255,.5)';
+    g.lineWidth = 1;
+    g.beginPath(); g.arc(tipX, tipY, 10, 0, Math.PI * 2); g.stroke();
+  }
+
+  // ---- 竖直顶端标记 ----
+  if (Math.abs(pendDeg) < 2) {
+    g.strokeStyle = '#3fb950';
+    g.lineWidth = 1.5;
+    g.beginPath(); g.arc(tipX, tipY, 8, 0, Math.PI * 2); g.stroke();
+  }
+}
+
+function drawSideView(g, cx, cy, R, pendDeg) {
+  const L = R * 1.75;
+  const rad = pendDeg * Math.PI / 180;
+
+  // 竖直参考线
+  g.strokeStyle = '#1f2630';
+  g.setLineDash([3, 4]); g.lineWidth = 1;
+  g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx, cy - L - 12); g.stroke();
+  g.setLineDash([]);
+
+  // 支点横线
+  g.strokeStyle = '#30363d';
+  g.beginPath();
+  g.moveTo(cx - R * 0.9, cy); g.lineTo(cx + R * 0.9, cy);
+  g.stroke();
+
+  // 摆杆
+  const ex = cx + L * Math.sin(rad);
+  const ey = cy - L * Math.cos(rad);
+  g.strokeStyle = Math.abs(pendDeg) < 5 ? '#3fb950'
+                : (Math.abs(pendDeg) < 15 ? '#ffb74d' : '#f85149');
+  g.lineWidth = 4; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(cx, cy); g.lineTo(ex, ey); g.stroke();
+
+  // 末端质量块
+  g.fillStyle = g.strokeStyle;
+  g.beginPath(); g.arc(ex, ey, 5, 0, Math.PI * 2); g.fill();
+
+  // 支点
+  g.fillStyle = '#30363d';
+  g.beginPath(); g.arc(cx, cy, 4.5, 0, Math.PI * 2); g.fill();
+
+  // 角度弧
+  if (Math.abs(pendDeg) > 3) {
+    g.strokeStyle = 'rgba(139,148,158,.5)';
+    g.lineWidth = 1;
+    g.beginPath();
+    const a0 = -Math.PI/2, a1 = -Math.PI/2 + rad;
+    g.arc(cx, cy, L * 0.42, Math.min(a0,a1), Math.max(a0,a1));
+    g.stroke();
+  }
+}
+
+// ---------------------------------------------------------------- 拖动设定目标
+//   在左侧俯视图内按住鼠标拖动，把摆臂拖到哪个角度就把目标设到哪里。
+//   拖动过程中【持续下发】（节流 60ms），松手后停止。
+let dragTimer = 0;
+let dragScreenCont = null;   // 拖动中的连续角度（unwrap）
+
+function animAngleAt(ev) {
+  if (!animGeom) return null;
+  const cv = $('anim');
+  const rect = cv.getBoundingClientRect();
+  const x = ev.clientX - rect.left - animGeom.cx;
+  const y = ev.clientY - rect.top  - animGeom.cy;
+  // 限制在左半区，避免和右侧侧视图冲突
+  if (ev.clientX - rect.left > rect.width / 2) return null;
+  const d = Math.hypot(x, y);
+  if (d < animGeom.R * 0.25) return null;    // 太靠近圆心，忽略
+
+  // atan2 返回 -180~180，直接用会在跨边界时跳变（1034 计数）
+  // 所以做 unwrap，得到连续角度
+  const raw = Math.atan2(y, x) * 180 / Math.PI;
+  dragScreenCont = unwrapDeg(raw, dragScreenCont);
+  return dragScreenCont;
+}
+
+function setTargetFromDeg(deg) {
+  // 屏幕角度 → 编码器计数：
+  //   显示角度 armDeg = SIGN_ARM × posCnt × 360/1040
+  //   反解得 posCnt = deg × 1040/360 / SIGN_ARM
+  const cnt = Math.round(deg * ENC_PER_REV / 360 / SIGN_ARM);
+  if (!port) return;
+  if (latest.state !== 2) return;            // 非平衡态不下发
+  if (wheelActive()) return;                 // 手轮模式：目标由固件接管
+  sendParam(ADDR_POS_TARGET, cnt);
+  $('posTgt').value = cnt;
+  $('posDeg').value = cntToDeg(cnt).toFixed(1);
+}
+
+const animCv = $('anim');
+
+animCv.addEventListener('pointerdown', ev => {
+  const deg = animAngleAt(ev);
+  if (deg === null) return;
+  if (!port) { log('未连接串口', 'e'); return; }
+  if (latest.state !== 2) { log('非平衡态，无法拖动设定（需先进入 BALANCE）', 'e'); return; }
+  if (wheelActive()) { log('手轮模式运行中，无法拖动设定位置（请先退出手轮模式）', 'e'); return; }
+
+  dragArm = true;
+  dragPrevTgt = latest.posTgt;
+  dragScreenCont = null;        // 重置连续角度，以当前拖动点为起点
+  animCv.classList.add('dragging');
+  animCv.setPointerCapture(ev.pointerId);
+  setTargetFromDeg(deg);
+  log(`拖动设定目标：${deg.toFixed(1)}°`);
+  ev.preventDefault();
+});
+
+animCv.addEventListener('pointermove', ev => {
+  if (!dragArm) return;
+  const now = performance.now();
+  if (now - dragTimer < 60) return;          // 节流
+  dragTimer = now;
+  const deg = animAngleAt(ev);
+  if (deg === null) return;
+  setTargetFromDeg(deg);
+  ev.preventDefault();
+});
+
+function endDrag(ev) {
+  if (!dragArm) return;
+  dragArm = false;
+  animCv.classList.remove('dragging');
+  try { animCv.releasePointerCapture(ev.pointerId); } catch (_) {}
+  log(`目标已设定：${latest.posTgt} 计数`);
+}
+animCv.addEventListener('pointerup', endDrag);
+animCv.addEventListener('pointercancel', endDrag);
+
+// 滚轮微调目标（每格 1°）
+animCv.addEventListener('wheel', ev => {
+  if (!port || latest.state !== 2) return;
+  const step = ev.deltaY > 0 ? -1 : 1;       // 向下滚 = 减
+  const cntPerDeg = ENC_PER_REV / 360;
+  const newTgt = latest.posTgt + step * cntPerDeg;
+  sendParam(ADDR_POS_TARGET, Math.round(newTgt));
+  $('posTgt').value = Math.round(newTgt);
+  ev.preventDefault();
+}, { passive: false });
+
+// ---------------------------------------------------------------- 波形绘制
+function drawWave() {
+  const cv = $('wave');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = cv.getBoundingClientRect();
+  const w = Math.max(1, Math.floor(rect.width));
+  const h = Math.max(1, Math.floor(rect.height));
+  if (cv.width !== Math.round(w*dpr) || cv.height !== Math.round(h*dpr)) {
+    cv.width  = Math.round(w*dpr);
+    cv.height = Math.round(h*dpr);
+  }
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.fillStyle = '#11161d';
+  g.fillRect(0, 0, w, h);
+
+  const padL = 56, padR = 10, padT = 28, padB = 18;
+  const pw = w - padL - padR;
+  const ph = h - padT - padB;
+  if (pw <= 4 || ph <= 4) return;
+
+  const spanSec = +$('span').value || 10;
+  const maxShow = Math.max(2, Math.round(spanSec * NOMINAL_HZ));
+
+  // 三条曲线各自归一化到同一绘图区（各自满量程）
+  //   角度：±ANG_FS 计数；位置：±POS_FS 计数；PWM：±PWM_MAX
+  const ANG_FS = 800;    // 角度超限保护值，正好是满刻度
+  const POS_FS = 2080;   // 2 圈
+
+  const series = [
+    { d: ch.ang.data, color: '#4fc3f7', fs: ANG_FS  },
+    { d: ch.pos.data, color: '#ffb74d', fs: POS_FS  },
+    { d: ch.pwm.data, color: '#ba68c8', fs: PWM_MAX },
+  ];
+
+  const n = Math.max(...series.map(s => s.d.length));
+  if (n < 2) {
+    g.fillStyle = '#6e7681';
+    g.font = '12px sans-serif';
+    g.textAlign = 'center';
+    g.fillText('等待数据…', w/2, h/2);
+    return;
+  }
+
+  // ---- 网格 ----
+  g.strokeStyle = '#1f2630';
+  g.lineWidth = 1;
+  g.beginPath();
+  for (let k = 0; k <= 4; k++) {
+    const y = Math.round(padT + ph * k / 4) + 0.5;
+    g.moveTo(padL, y); g.lineTo(padL + pw, y);
+  }
+  for (let k = 0; k <= 10; k++) {
+    const x = Math.round(padL + pw * k / 10) + 0.5;
+    g.moveTo(x, padT); g.lineTo(x, padT + ph);
+  }
+  g.stroke();
+
+  // ---- 零线（居中）----
+  g.strokeStyle = '#3d444d';
+  g.setLineDash([4, 4]);
+  g.beginPath();
+  const y0 = Math.round(padT + ph/2) + 0.5;
+  g.moveTo(padL, y0); g.lineTo(padL + pw, y0);
+  g.stroke();
+  g.setLineDash([]);
+
+  // ---- Y 轴刻度（以「归一化 %」标注，避免三量纲混淆）----
+  g.fillStyle = '#6e7681';
+  g.font = '10px ui-monospace,Consolas,monospace';
+  g.textAlign = 'right';
+  g.textBaseline = 'middle';
+  for (let k = 0; k <= 4; k++) {
+    const pct = 100 - k * 50;
+    g.fillText(pct + '%', padL - 5, padT + ph * k / 4);
+  }
+
+  // ---- 曲线 ----
+  for (const s of series) {
+    const d = s.d.length > maxShow ? s.d.slice(s.d.length - maxShow) : s.d;
+    if (d.length < 2) continue;
+
+    g.strokeStyle = s.color;
+    g.lineWidth = 1.3;
+    g.lineJoin = 'round';
+    g.beginPath();
+
+    const perPx = d.length / pw;
+    if (perPx > 2) {
+      for (let px = 0; px < pw; px++) {
+        const i0 = Math.floor(px * perPx);
+        const i1 = Math.min(d.length, Math.floor((px + 1) * perPx));
+        if (i1 <= i0) continue;
+        let mn = Infinity, mx = -Infinity;
+        for (let k = i0; k < i1; k++) {
+          const v = d[k];
+          if (v < mn) mn = v;
+          if (v > mx) mx = v;
+        }
+        const yA = padT + ph * (0.5 - clamp(mx / s.fs, -1, 1) * 0.48);
+        const yB = padT + ph * (0.5 - clamp(mn / s.fs, -1, 1) * 0.48);
+        const x = padL + px + 0.5;
+        g.moveTo(x, yA); g.lineTo(x, yB);
+      }
+    } else {
+      for (let k = 0; k < d.length; k++) {
+        const x = padL + pw * k / (d.length - 1);
+        const y = padT + ph * (0.5 - clamp(d[k] / s.fs, -1, 1) * 0.48);
+        if (k === 0) g.moveTo(x, y); else g.lineTo(x, y);
+      }
+    }
+    g.stroke();
+  }
+
+  $('waveScale').textContent =
+    `角度 ±${ANG_FS}cnt · 位置 ±${POS_FS}cnt · PWM ±${PWM_MAX}`;
+}
+
+function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+// ---------------------------------------------------------------- 麦克风音频时域波形
+//   固件把 15.625 kSPS 的交流采样 ÷8（1953.125 Hz），每 20ms 帧带 39 点上传，
+//   这里按时间（与上方波形共用「时间窗」）画成连续滚动波形：
+//     · 纵轴对称自动缩放到窗口内峰值（向上取整到 1/2/5×10ⁿ）
+//     · 样点多于像素时按像素取 min/max，不会丢峰
+//     · 表头显示 单频 DFT 幅值 / 窗口峰值 / 量程
+function niceCeil(v) {
+  const e = Math.pow(10, Math.floor(Math.log10(v)));
+  const m = v / e;
+  const f = m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10;
+  return f * e;
+}
+
+function drawMic() {
+  const cv = $('micwave');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = cv.getBoundingClientRect();
+  const w = Math.max(1, Math.floor(rect.width));
+  const h = Math.max(1, Math.floor(rect.height));
+  if (cv.width !== Math.round(w*dpr) || cv.height !== Math.round(h*dpr)) {
+    cv.width  = Math.round(w*dpr);
+    cv.height = Math.round(h*dpr);
+  }
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.fillStyle = '#11161d';
+  g.fillRect(0, 0, w, h);
+
+  const padL = 56, padR = 10, padT = 26, padB = 12;
+  const pw = w - padL - padR;
+  const ph = h - padT - padB;
+  if (pw <= 4 || ph <= 4) return;
+
+  const spanSec = +$('span').value || 10;
+  const showN = Math.max(64, Math.round(spanSec * AUD_FS));
+  const all = ch.mic.data;
+  const start = Math.max(0, all.length - showN);
+  const n = all.length - start;
+
+  // ---- 纵轴对称自动缩放 ----
+  let pk = 0;
+  for (let k = start; k < all.length; k++) {
+    const a = all[k] < 0 ? -all[k] : all[k];
+    if (a > pk) pk = a;
+  }
+  const mx = niceCeil(Math.max(pk * 1.1, 64));
+
+  // ---- 网格 ----
+  g.strokeStyle = '#1f2630';
+  g.lineWidth = 1;
+  g.beginPath();
+  for (let k = 0; k <= 2; k++) {
+    const y = Math.round(padT + ph * k / 2) + 0.5;
+    g.moveTo(padL, y); g.lineTo(padL + pw, y);
+  }
+  for (let k = 0; k <= 10; k++) {
+    const x = Math.round(padL + pw * k / 10) + 0.5;
+    g.moveTo(x, padT); g.lineTo(x, padT + ph);
+  }
+  g.stroke();
+
+  // ---- 零线 ----
+  g.strokeStyle = '#3d444d';
+  g.setLineDash([4, 4]);
+  const y0 = Math.round(padT + ph / 2) + 0.5;
+  g.beginPath(); g.moveTo(padL, y0); g.lineTo(padL + pw, y0); g.stroke();
+  g.setLineDash([]);
+
+  // ---- Y 轴刻度 ----
+  g.fillStyle = '#6e7681';
+  g.font = '10px ui-monospace,Consolas,monospace';
+  g.textAlign = 'right';
+  g.textBaseline = 'middle';
+  g.fillText('' + mx,  padL - 5, padT + 0.5);
+  g.fillText('0',      padL - 5, padT + ph / 2);
+  g.fillText('' + (-mx), padL - 5, padT + ph);
+
+  // ---- 表头 ----
+  $('micTitle').textContent = `麦克风音频波形（时域）· ${AUD_FS.toFixed(0)}Hz`;
+  $('micNow').textContent   = hasData ? latest.micLvl : '–';
+  $('micPk').textContent    = n ? pk : '–';
+  $('micScale').textContent = `±${mx}`;
+
+  if (n < 2) {
+    g.fillStyle = '#6e7681';
+    g.font = '12px sans-serif';
+    g.textAlign = 'center';
+    g.fillText('等待麦克风数据…', w / 2, padT + ph / 2);
+    return;
+  }
+
+  const Y = v => padT + ph * (0.5 - clamp(v / mx, -1, 1) * 0.46);
+
+  // ---- 波形（像素级 min/max，压缩时也不丢峰）----
+  g.strokeStyle = '#4db6ac';
+  g.lineWidth = 1.2;
+  g.lineJoin = 'round';
+  g.beginPath();
+  const perPx = n / pw;
+  if (perPx > 2) {
+    for (let px = 0; px < pw; px++) {
+      const i0 = start + Math.floor(px * perPx);
+      const i1 = Math.min(all.length, start + Math.floor((px + 1) * perPx));
+      if (i1 <= i0) continue;
+      let mn = 1e9, mxv = -1e9;
+      for (let k = i0; k < i1; k++) {
+        const v = all[k];
+        if (v < mn)  mn  = v;
+        if (v > mxv) mxv = v;
+      }
+      const x = padL + px + 0.5;
+      g.moveTo(x, Y(mxv));
+      g.lineTo(x, Y(mn));
+    }
+  } else {
+    for (let k = 0; k < n; k++) {
+      const x = padL + pw * k / (n - 1);
+      if (k === 0) g.moveTo(x, Y(all[start + k]));
+      else         g.lineTo(x, Y(all[start + k]));
+    }
+  }
+  g.stroke();
+}
+
+// ---------------------------------------------------------------- 麦克风单频检测
+//   0x18 = MIC_FREQ（目标频率 Hz）
+//   0x19 = MIC_TH  （点亮阈值，与遥测 micLvl 同标度，满幅 ≈ 31000）
+//   0x1A = MIC_HOLD（保持时间，单位 5ms）
+function sendMicCfg() {
+  const f    = +$('micFreq').value;
+  const th   = +$('micTh').value;
+  const hold = +$('micHold').value;
+  if (!isFinite(f) || f < 1 || f > 7800)
+    { log('目标频率需在 1 ~ 7800 Hz 之间（fs/2 = 7812）', 'e'); return; }
+  if (!isFinite(th) || th < 0 || th > 65535)
+    { log('幅值阈值无效', 'e'); return; }
+  if (!isFinite(hold) || hold < 0 || hold > 65535)
+    { log('保持时间无效', 'e'); return; }
+  if (!sendParam(0x18, f) || !sendParam(0x19, th) || !sendParam(0x1A, hold)) return;
+  MIC_FREQ = Math.round(f);
+  MIC_TH   = Math.round(th);
+  log(`麦克风参数已下发 FREQ=${f}Hz TH=${th} HOLD=${hold}（${hold * 5}ms）`, 'k');
+}
+$('btnMicSend').addEventListener('click', sendMicCfg);
+$('micFreq').addEventListener('input', () => {
+  const f = +$('micFreq').value;
+  if (isFinite(f) && f > 0)
+    $('micFreqHint').textContent =
+      `相位字 ${Math.round(f * 65536 / MIC_FS)} · 分辨率 ${(MIC_FS / 65536).toFixed(2)}Hz · 主瓣宽 ${(MIC_FS / 512).toFixed(1)}Hz`;
+});
+
+// ---------------------------------------------------------------- α-β 滤波器
+//   0x1B = AB_ALPHA (Q8)   0x1C = AB_BETA (Q8)
+//   Benedict-Bordner：β = α²/(2-α)，Q8 形式 β_q8 = α_q8²/(512-α_q8)
+function abBetaFromAlpha(a) {
+  return Math.max(1, Math.min(255, Math.round(a * a / (512 - a))));
+}
+function abRefreshHint() {
+  const a = +$('abA').value;
+  const b = +$('abB').value;
+  $('abAHint').textContent =
+    `α = ${(a / 256).toFixed(3)} · β = ${(b / 256).toFixed(4)}  ` +
+    `位置噪声 ≈ ${(22 * Math.sqrt(a / (512 - a))).toFixed(1)} 计数`;
+}
+$('abA').addEventListener('input', abRefreshHint);
+$('abB').addEventListener('input', abRefreshHint);
+$('btnAbSync').addEventListener('click', () => {
+  $('abB').value = abBetaFromAlpha(+$('abA').value);
+  abRefreshHint();
+  log('β 已按 β = α²/(2-α) 重算（未下发）');
+});
+$('btnAbSend').addEventListener('click', () => {
+  const a = Math.round(+$('abA').value);
+  const b = Math.round(+$('abB').value);
+  if (!isFinite(a) || a < 1 || a > 255) { log('α 需在 1~255 之间（Q8）', 'e'); return; }
+  if (!isFinite(b) || b < 1 || b > 255) { log('β 需在 1~255 之间（Q8）', 'e'); return; }
+  if (!sendParam(0x1B, a) || !sendParam(0x1C, b)) return;
+  log(`α-β 已下发 α=${a} (${(a / 256).toFixed(3)}) β=${b} (${(b / 256).toFixed(4)})`, 'k');
+});
+abRefreshHint();
+
+// ---------------------------------------------------------------- 全部可调参数
+//   与 pendulum_ctrl.v / top.v 的 RP_* 地址表一一对应。
+//   d = 固件上电默认值（改固件后请同步这里，否则只影响界面显示）
+const PARAM_DEFS = [
+  { g:'角度环 PID（S_BALANCE）', c:'#4fc3f7', items:[
+    { a:0x01, n:'BAL_KP',       d:120,  h:'角度环 P（356 PWM/度，饱和±14.5°）' },
+    { a:0x02, n:'BAL_KD',       d:525,  h:'角度环 D（受速度量化限制，不要>800）' },
+  ]},
+  { g:'角度环 · 捕获期软参数（前 550ms）', c:'#ffb74d', items:[
+    { a:0x06, n:'BAL_KP_CATCH', d:102,  h:'捕获期角度 P' },
+    { a:0x07, n:'BAL_KD_CATCH', d:436,  h:'捕获期角度 D' },
+    { a:0x08, n:'POS_KP_CATCH', d:15,   h:'捕获期位置 P' },
+    { a:0x09, n:'POS_KD_CATCH', d:500,  h:'捕获期位置 D' },
+  ]},
+  { g:'位置环 PID（摆臂）', c:'#81c784', items:[
+    { a:0x03, n:'POS_KP',       d:25,   h:'位置环 P' },
+    { a:0x04, n:'POS_KD',       d:450,  h:'位置环 D（已含 ×5 补偿）' },
+    { a:0x05, n:'POS_KI',       d:0,    h:'位置环 I（0 = 关闭）' },
+    { a:0x0D, n:'POS_SLEW_MAX', d:250,  h:'输出斜率限幅 PWM/tick' },
+  ]},
+  { g:'α-β 滤波器', c:'#ba68c8', items:[
+    { a:0x1B, n:'AB_ALPHA',     d:153,  h:'α（Q8，153=0.598）越大速度跟得越快' },
+    { a:0x1C, n:'AB_BETA',      d:65,   h:'β（Q8，65=0.254）取 α²/(2-α)' },
+  ]},
+  { g:'起摆 · 甩杆（SWING_MODE=1）', c:'#e57373', items:[
+    { a:0x11, n:'FLING_STEP',   d:341,  h:'甩杆位移（1040 = 1 圈，可负）' },
+    { a:0x12, n:'FLING_KP',     d:90,   h:'甩杆 P' },
+    { a:0x13, n:'FLING_KD',     d:180,  h:'甩杆 D' },
+    { a:0x14, n:'FLING_BACK',   d:80,   h:'回杆量（0 = 单相）' },
+    { a:0x15, n:'FLING_DECEL',  d:30,   h:'减速段行程（0 = 两相）' },
+    { a:0x16, n:'FLING_WIN',    d:15,   h:'到位判定窗口（计数）' },
+    { a:0x17, n:'FLING_PTICKS', d:60,   h:'单相超时（×5ms）' },
+  ]},
+  { g:'起摆 · 能量泵（SWING_MODE=0 时生效）', c:'#ff8a65', items:[
+    { a:0x0A, n:'SWING_GAIN',   d:1200, h:'泵力幅值' },
+    { a:0x0B, n:'SWING_DAMP',   d:20,   h:'摆臂速度阻尼' },
+    { a:0x0C, n:'SWING_QUARTER',d:267,  h:'90° 对应计数（新标度 534/2，旧值 1000 已失效）' },
+  ]},
+  { g:'零点 / 目标', c:'#90a4ae', items:[
+    { a:0x0E, n:'BAL_TARGET',   d:768,  h:'角度平衡点（ADC 计数，竖直实测值）' },
+    { a:0x0F, n:'POS_TARGET',   d:0,    h:'位置目标（仅在 BALANCE 生效）' },
+  ]},
+  { g:'麦克风单频检测', c:'#4db6ac', items:[
+    { a:0x18, n:'MIC_FREQ',     d:1000, h:'目标频率（Hz，1~7800）' },
+    { a:0x19, n:'MIC_TH',       d:500,  h:'LED3 点亮阈值' },
+    { a:0x1A, n:'MIC_HOLD',     d:20,   h:'保持时间（×5ms）' },
+  ]},
+  { g:'运动模式（板上 SW2 选择 / SW1 确认）', c:'#ffd54f', items:[
+    { a:0x1F, n:'MOVE_MODE',    d:0,    h:'0=纯稳摆 1=正弦 2=三角 3=线性 4=四四拍(左左右右) 5=手轮(摇杆)' },
+    { a:0x1D, n:'MOVE_AMP',     d:87,   h:'模式 1~3 曲线幅度（计数），87 = 30°' },
+    { a:0x20, n:'BEAT_AMP',     d:44,   h:'四四拍强拍峰值（计数，独立参数），44 ≈ 15°' },
+    { a:0x1E, n:'MOVE_PERIOD',  d:800,  h:'周期（×5ms），800 = 4 秒（四四拍即每拍 1s）' },
+  ]},
+];
+
+// 编译期参数（不能串口改，仅供查阅）
+const PARAM_FIXED = [
+  ['小增益区',     'ANGLE_DZ=5, SHIFT=0, LOG2=3', '⚠ SHIFT=0 且 BAL_MODE=1 → **已关闭**'],
+  ['D 项低通',     'ANG_D_LPF_SHIFT=0',            '⚠ 0 = 关闭（α-β 已接管）'],
+  ['角度超限保护', 'LIMIT=800, TICKS=20, EN=1',    '±800 计数 ≈ ±48°，连续 20 拍(100ms) 确认'],
+  ['削顶判倾倒',   'LO=12, HI=4080',               '固定，不需调'],
+  ['PWM 限幅',     'PWM_MAX=5300 → EFF 5175',      'BAL_MODE 下取 5175'],
+  ['位置环限幅',   'EFF_PWM_MAX/2 = 2587',         '位置环最多占一半预算'],
+  ['积分上限',     'EFF_PWM_MAX/8 ≈ 647',          'POS_I_BAND=40, POS_I_VEL_BAND=2'],
+  ['编码器突变',   'EFF 40（BAL_MODE）',           '宽限 PROT_GRACE=60 拍(300ms)'],
+  ['起摆超时',     '600 拍 = 3s',                  'SWING_GIVEUP_WIN=500'],
+  ['手动窗口',     'EFF 500（BAL_MODE）',          '启动时允许的倾角范围'],
+  ['位置滤波',     'SHIFT=3（1/8）',               'POS_D_SCALE=5 已并入 POS_KD'],
+  ['编码器零点',   '10000',                        '源码固定'],
+];
+
+function hex2(v) { return v.toString(16).toUpperCase().padStart(2, '0'); }
+
+function buildAllParams() {
+  const body = $('allParamBody');
+  body.innerHTML = '';
+
+  for (const g of PARAM_DEFS) {
+    const hdr = document.createElement('div');
+    hdr.style.cssText =
+      `font-size:11px;font-weight:600;margin:10px 0 5px;color:${g.c};` +
+      `border-bottom:1px solid ${g.c}33;padding-bottom:2px`;
+    hdr.textContent = g.g;
+    body.appendChild(hdr);
+
+    for (const it of g.items) {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:5px;margin-bottom:3px';
+
+      const nm = document.createElement('span');
+      nm.style.cssText =
+        'flex:1;font-size:11px;white-space:nowrap;overflow:hidden;' +
+        'text-overflow:ellipsis;font-family:monospace;color:#c9d1d9';
+      nm.textContent = it.n;
+      nm.title = `${it.h}\n串口地址 0x${hex2(it.a)}`;
+
+      const ad = document.createElement('span');
+      ad.style.cssText = 'font-size:9px;color:#5a6672;font-family:monospace';
+      ad.textContent = hex2(it.a);
+
+      const inp = document.createElement('input');
+      inp.type = 'number';
+      inp.value = it.d;
+      inp.dataset.addr = it.a;
+      inp.dataset.def = it.d;
+      inp.dataset.nm = it.n;
+      inp.dataset.hint = it.h;
+      inp.style.cssText =
+        'width:64px;font-size:11px;padding:2px 3px;background:#0b0f14;' +
+        'color:var(--text);border:1px solid var(--border);border-radius:4px';
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') inp.nextSibling.click(); });
+
+      const btn = document.createElement('button');
+      btn.className = 'sm';
+      btn.textContent = '↓';
+      btn.style.cssText = 'padding:2px 8px;font-size:11px;min-width:0';
+      btn.title = '下发 ' + it.n;
+      btn.addEventListener('click', () => {
+        const v = Math.round(+inp.value);
+        if (!isFinite(v)) { log(`${it.n} 数值无效`, 'e'); return; }
+        if (sendParam(it.a, v))
+          log(`${it.n} [0x${hex2(it.a)}] → ${v}   ${it.h}`, 'k');
+      });
+
+      row.append(nm, ad, inp, btn);
+      body.appendChild(row);
+    }
+  }
+
+  // 编译期只读参数
+  const hdr2 = document.createElement('div');
+  hdr2.style.cssText =
+    'font-size:11px;font-weight:600;margin:14px 0 5px;color:#6e7681;' +
+    'border-bottom:1px solid #30363d;padding-bottom:2px';
+  hdr2.textContent = '编译期固定（改 top.v 后重新综合）';
+  body.appendChild(hdr2);
+
+  for (const [k, v, note] of PARAM_FIXED) {
+    const row = document.createElement('div');
+    row.style.cssText = 'font-size:10px;margin-bottom:3px;line-height:1.45';
+    row.innerHTML =
+      `<span style="color:#8b949e;font-family:monospace">${k}</span> ` +
+      `<span style="color:#c9d1d9;font-family:monospace">${v}</span><br>` +
+      `<span style="color:#5a6672;padding-left:8px">${note}</span>`;
+    body.appendChild(row);
+  }
+}
+
+function allInputs() {
+  return Array.from($('allParamBody').querySelectorAll('input[data-addr]'));
+}
+
+$('btnAllParams').addEventListener('click', () => {
+  const show = $('allParamPanel').style.display === 'none';
+  $('allParamPanel').style.display = show ? 'block' : 'none';
+  $('btnAllParams').classList.toggle('active', show);
+});
+$('btnAllSend').addEventListener('click', () => {
+  const list = allInputs();
+  if (!port || !writer) { log('未连接，参数未下发', 'e'); return; }
+  let n = 0;
+  for (const inp of list) {
+    const v = Math.round(+inp.value);
+    if (!isFinite(v)) { log(`${inp.dataset.nm} 数值无效，已跳过`, 'e'); continue; }
+    if (sendParam(+inp.dataset.addr, v)) n++;
+  }
+  log(`已下发 ${n}/${list.length} 个参数`, 'k');
+});
+$('btnAllDefault').addEventListener('click', () => {
+  for (const inp of allInputs()) inp.value = inp.dataset.def;
+  log('已恢复为面板默认值（未下发）');
+});
+buildAllParams();
+
+// ---------------------------------------------------------------- 串口控制
+function sendParam(addr, value) {
+  if (!port || !writer) { log('未连接，参数未下发', 'e'); return false; }
+  const v = ((Math.round(value) % 65536) + 65536) % 65536;
+  const dh = (v >> 8) & 0xFF, dl = v & 0xFF;
+  const chk = 0x01 ^ (addr & 0xFF) ^ dh ^ dl;
+  const buf = new Uint8Array([0xAA, 0x55, 0x01, addr & 0xFF, dh, dl, chk, 0x0D, 0x0A]);
+  writer.write(buf).catch(e => log('写入失败：' + e.message, 'e'));
+  return true;
+}
+
+async function connect() {
+  if (!('serial' in navigator)) {
+    log('当前浏览器不支持 Web Serial。请用 Chrome / Edge 86+。', 'e');
+    return;
+  }
+  try {
+    port = await navigator.serial.requestPort();
+    const baudRate = +$('baud').value;
+    await port.open({ baudRate, dataBits: 8, stopBits: 1, parity: 'none', flowControl: 'none' });
+    writer = port.writable.getWriter();
+    keepReading = true;
+
+    $('btnConn').textContent = '断开';
+    $('btnConn').classList.remove('primary');
+    $('btnConn').classList.add('danger');
+    for (const id of ['btnPause','btnClear','btnCsv']) $(id).disabled = false;
+    $('dot').className = 'dot on';
+    $('stTxt').textContent = `${baudRate} 8N1`;
+    log(`已连接 ${baudRate} 8N1`);
+
+    // 同步平衡点到固件当前值（初始假定为 3000）
+    readLoop();
+  } catch (e) {
+    if (e && e.name === 'NotFoundError') log('用户取消选择端口');
+    else log('打开串口失败：' + (e && e.message ? e.message : e), 'e');
+  }
+}
+
+async function disconnect() {
+  keepReading = false;
+  try { if (reader) await reader.cancel(); } catch (_) {}
+  try { if (writer) { writer.releaseLock(); writer = null; } } catch (_) {}
+  try { if (port) await port.close(); } catch (_) {}
+  reader = null; port = null;
+
+  $('btnConn').textContent = '连接串口';
+  $('btnConn').classList.add('primary');
+  $('btnConn').classList.remove('danger');
+  for (const id of ['btnPause','btnClear','btnCsv']) $(id).disabled = true;
+  $('dot').className = 'dot';
+  $('stTxt').textContent = '未连接';
+  rateEma = 0;
+  log('已断开');
+}
+
+async function readLoop() {
+  while (port && port.readable && keepReading) {
+    let r;
+    try {
+      r = port.readable.getReader();
+      reader = r;
+      while (keepReading) {
+        const { value, done } = await r.read();
+        if (done) break;
+        if (value && value.length) feed(value);
+      }
+    } catch (e) {
+      if (keepReading) log('读取中断：' + (e && e.message ? e.message : e), 'e');
+      break;
+    } finally {
+      try { r && r.releaseLock(); } catch (_) {}
+      reader = null;
+    }
+  }
+  if (port) await disconnect();
+}
+
+// ---------------------------------------------------------------- 5 个控制按钮
+const ADDR_CMD = 0x10;
+const CMD_START = 1, CMD_STOP = 2, CMD_RESET = 3, CMD_ARM = 4, CMD_DISARM = 5;
+
+function sendCmd(code) {
+  if (!port || !writer) { log('未连接串口', 'e'); return false; }
+  sendParam(ADDR_CMD, code);
+  return true;
+}
+
+// ---- ① 起摆（启动/停止，等价 SW1）----
+$('btnStart').addEventListener('click', () => {
+  if (sendCmd(CMD_START)) {
+    log(latest.state === 0 ? '① 启动 → 起摆' : '① 停止');
+  }
+});
+
+// ---- ⑤ 系统复位 ----
+$('btnReset').addEventListener('click', () => {
+  if (!port) { log('未连接串口', 'e'); return; }
+  if (!confirm('确定要复位系统吗？\n\n将停止运动、清除所有运行状态并恢复默认参数。')) return;
+  sendCmd(CMD_RESET);
+  stopProfile(true);
+  log('⑤ 系统软复位已下发');
+});
+
+// ---- ③④ 位置 ±30° ----
+//   【方向】显示正向 = 计数减小（SIGN_ARM = -1），
+//   所以按钮上的「+30°」必须下发 cnt - 87，否则会越按越远。
+function bumpDeg(deg) {
+  if (!port) { log('未连接串口', 'e'); return; }
+  if (latest.state !== 2) { log('非平衡态，无法调整位置目标（需先进入 BALANCE）', 'e'); return; }
+  if (prof.active) { log('运动曲线运行中，请先停止', 'e'); return; }
+  if (wheelActive()) { log('手轮模式运行中：目标由手轮决定，请先退出手轮模式', 'e'); return; }
+  const dCnt = Math.round(deg * ENC_PER_REV / 360 / SIGN_ARM);
+  const tgt = latest.posTgt + dCnt;
+  sendParam(ADDR_POS_TARGET, tgt);
+  $('posTgt').value = tgt;
+  $('posDeg').value = cntToDeg(tgt).toFixed(1);
+  log(`位置目标 ${deg > 0 ? '+' : ''}${deg}° → ${tgt} 计数`);
+}
+$('btnPosInc30').addEventListener('click', () => bumpDeg(+30));
+$('btnPosDec30').addEventListener('click', () => bumpDeg(-30));
+
+// ---------------------------------------------------------------- 手轮（摇杆）模式
+//   固件生效条件：MOVE_MODE(0x1F)=5 且「模式已确认」（arm）。
+//   板上： SW2 选到模式 5（LED 全亮）→ SW1 确认；
+//   网页： 0x1F←5 预选 → 0x10←4 确认（arm）；退出：0x10←5 取消 + 0x1F←0。
+//   进入后固件每 5ms 按「手轮增量 + 限速 + 超前限幅」重写 pos_target，
+//   所以网页下发的 POS_TARGET 会被覆盖 —— 相关按钮已加拦截。
+const ADDR_MOVE_MODE = 0x1F;
+
+function wheelActive() {
+  return latest.state === 2 && latest.mode === 5 && latest.armed === 1;
+}
+
+// 把「全部参数」面板里的某一项同步成当前值（非必需，仅为避免误导）
+function syncParamInput(addr, v) {
+  for (const inp of allInputs())
+    if (+inp.dataset.addr === addr) { inp.value = v; return; }
+}
+
+function syncMoveModeInput(v) { syncParamInput(ADDR_MOVE_MODE, v); }
+
+function setWheelMode(on) {
+  if (!port || !writer) { log('未连接串口', 'e'); return; }
+  if (latest.state !== 2) {
+    log('非平衡态：请先按 ① 起摆，进入 BALANCE 后再开手轮模式', 'e');
+    return;
+  }
+  if (on) {
+    if (prof.active) { log('运动曲线运行中，请先停止再开手轮模式', 'e'); return; }
+    sendParam(ADDR_MOVE_MODE, 5);   // 预选手轮模式（LED1~3 全亮）
+    sendCmd(CMD_ARM);               // 确认执行（等价板上的 SW1）
+    syncMoveModeInput(5);
+    log('🖐 手轮模式已请求：MOVE_MODE=5 + CMD=4（arm）→ 转动手轮即可', 'k');
+  } else {
+    sendCmd(CMD_DISARM);            // 取消执行
+    sendParam(ADDR_MOVE_MODE, 0);   // 回到纯稳摆
+    syncMoveModeInput(0);
+    log('🖐 手轮模式已退出（CMD=5 + MOVE_MODE=0），摆臂停在原地', 'k');
+  }
+}
+
+$('btnWheel').addEventListener('click', () => setWheelMode(!wheelActive()));
+
+// ---------------------------------------------------------------- 四四拍（左 左 右 右）
+//   固件模式 4：每拍一个半正弦鼓包，拍间回零；
+//     方向：左 左 右 右；幅度：强 弱 次强 弱 = 1.00 / 0.40 / 0.70 / 0.40。
+//   拍幅是【独立参数】BEAT_AMP(0x20)，与 MOVE_AMP(0x1D，模式 1~3 用) 互不影响。
+//   开启： 0x20←拍幅 → 0x1F←4 → 0x10←4(arm)；关闭：0x10←5 → 0x1F←0。
+const ADDR_BEAT_AMP = 0x20;
+
+function beatActive() {
+  return latest.state === 2 && latest.mode === 4 && latest.armed === 1;
+}
+
+function sendBeatAmp() {
+  const v = Math.round(+$('beatAmp').value);
+  if (!isFinite(v) || v < 0 || v > 520) {
+    log('拍幅需在 0~520 计数（0~180°）', 'e');
+    return false;
+  }
+  if (!sendParam(ADDR_BEAT_AMP, v)) return false;
+  syncParamInput(ADDR_BEAT_AMP, v);
+  log(`四四拍拍幅 → ${v} 计数（${(v * 360 / ENC_PER_REV).toFixed(1)}°）`, 'k');
+  return true;
+}
+
+$('btnBeatAmpSend').addEventListener('click', sendBeatAmp);
+$('beatAmp').addEventListener('input', () => {
+  const v = +$('beatAmp').value;
+  if (isFinite(v))
+    $('beatAmpHint').textContent = `≈${(v * 360 / ENC_PER_REV).toFixed(1)}°`;
+});
+
+function setBeatMode(on) {
+  if (!port || !writer) { log('未连接串口', 'e'); return; }
+  if (latest.state !== 2) {
+    log('非平衡态：请先按 ① 起摆，进入 BALANCE 后再开四四拍', 'e');
+    return;
+  }
+  if (on) {
+    if (prof.active) { log('浏览器运动曲线运行中，请先停止', 'e'); return; }
+    if (wheelActive()) { log('手轮模式运行中，请先退出手轮模式', 'e'); return; }
+    if (!sendBeatAmp()) return;         // 先下发独立拍幅
+    sendParam(ADDR_MOVE_MODE, 4);       // 预选四四拍
+    sendCmd(CMD_ARM);                   // 确认执行（等价 SW1）
+    syncMoveModeInput(4);
+    log('🎵 四四拍已请求：BEAT_AMP=' + $('beatAmp').value + ' + MOVE_MODE=4 + CMD=4', 'k');
+  } else {
+    sendCmd(CMD_DISARM);
+    sendParam(ADDR_MOVE_MODE, 0);
+    syncMoveModeInput(0);
+    log('🎵 四四拍已退出（CMD=5 + MOVE_MODE=0）', 'k');
+  }
+}
+
+$('btnBeat').addEventListener('click', () => setBeatMode(!beatActive()));
+
+// ---------------------------------------------------------------- ② 运动曲线
+//   起点 = 按下「开始运动」那一刻的实际位置（enc1 − 零点）
+//   波形在【浏览器端】逐拍生成，通过 POS_TARGET 持续下发。
+//   固件侧 RAMP_STEP=1（200 计数/s ≈ 69°/s）是实际速率上限，
+//   因此幅度/周期需保证峰值速度 <= 69°/s，否则波形会被斜坡削顶。
+const prof = {
+  active: false,
+  t0: 0,
+  startCnt: 0,
+  ampCnt: 0,
+  periodMs: 0,
+  type: 'sine',
+  timer: 0,
+  lastSent: null,
+};
+
+// 峰值速度检查：v_peak(°/s)
+function profPeakSpeed(type, ampDeg, periodS) {
+  if (periodS <= 0) return Infinity;
+  if (type === 'sine') return ampDeg * 2 * Math.PI / periodS;   // A·ω
+  if (type === 'tri')  return ampDeg * 4 / periodS;             // 4A/T
+  return ampDeg / periodS;                                       // 线性：(初速0) 平均
+}
+
+// 返回当前相位对应的偏移量（计数）
+function profOffset(type, phase, amp) {
+  // phase: 0..1
+  if (type === 'sine') {
+    return amp * Math.sin(2 * Math.PI * phase);
+  }
+  if (type === 'tri') {
+    // 0 → +A → 0 → −A → 0
+    const p = phase * 4;
+    if (p < 1) return amp * p;
+    if (p < 2) return amp * (2 - p);
+    if (p < 3) return amp * (2 - p);
+    return amp * (p - 4);
+  }
+  // 线性：0 → +A 后保持
+  return amp * Math.min(1, phase);
+}
+
+function toggleProfilePanel() {
+  const p = $('profilePanel');
+  const show = p.style.display === 'none';
+  p.style.display = show ? 'block' : 'none';
+  $('btnProfile').classList.toggle('active', show);
+  if (show && latest.state === 2) {
+    $('profHint').textContent =
+      `起点 = 当前位置 ${curPosCnt()} 计数（${(curPosCnt()*360/ENC_PER_REV).toFixed(1)}°）`;
+  }
+}
+
+$('btnProfile').addEventListener('click', toggleProfilePanel);
+
+// 开始运动（二次确认）
+$('btnProfRun').addEventListener('click', () => {
+  if (!port) { log('未连接串口', 'e'); return; }
+  if (latest.state !== 2) {
+    log('非平衡态，请先按 ① 起摆并进入 BALANCE', 'e');
+    return;
+  }
+  if (prof.active) { log('运动曲线已在运行', 'e'); return; }
+  if (wheelActive()) { log('手轮模式运行中，请先退出手轮模式', 'e'); return; }
+
+  const type   = $('profType').value;
+  const ampDeg = +$('profAmp').value;
+  const periodS = +$('profT').value;
+
+  if (!isFinite(ampDeg) || !isFinite(periodS) || periodS <= 0) {
+    log('幅度/周期无效', 'e'); return;
+  }
+
+  const ampCnt   = Math.round(ampDeg * ENC_PER_REV / 360);
+  const startCnt = curPosCnt();
+
+  // ---- 速度可行性检查 ----
+  const vPeak = profPeakSpeed(type, ampDeg, periodS);
+  const V_MAX = 69;   // 固件 RAMP_STEP 决定的 °/s 上限
+  let warn = '';
+  if (vPeak > V_MAX) {
+    warn = `\n\n⚠ 峰值速度 ${vPeak.toFixed(1)}°/s 超过固件斜坡上限 ${V_MAX}°/s，` +
+           `实际波形会被削顶（变小、变慢）。\n` +
+           `建议：幅度 ≤ ${(ampDeg*V_MAX/vPeak).toFixed(0)}° 或周期 ≥ ${(periodS*vPeak/V_MAX).toFixed(1)}s`;
+  }
+
+  const typeName = {sine:'正弦', tri:'三角', lin:'线性'}[type];
+  const msg =
+    `即将开始位置环运动：\n\n` +
+    `波形：${typeName}\n` +
+    `幅度：±${ampDeg}°（${ampCnt} 计数）\n` +
+    `周期：${periodS} s\n` +
+    `起点：${startCnt} 计数（当前位置）\n` +
+    `终点：${startCnt + ampCnt} 计数\n` +
+    `峰值速度：${vPeak.toFixed(1)}°/s` + warn +
+    `\n\n确定开始吗？`;
+
+  if (!confirm(msg)) { log('已取消运动曲线'); return; }
+
+  // ---- 启动 ----
+  prof.active   = true;
+  prof.type     = type;
+  prof.t0       = performance.now();
+  prof.startCnt = startCnt;
+  prof.ampCnt   = ampCnt;
+  prof.periodMs = periodS * 1000;
+  prof.lastSent = null;
+
+  $('btnProfRun').disabled = true;
+  $('btnProfRun').textContent = '运行中…';
+  log(`② 运动曲线开始：${typeName} ±${ampDeg}° / ${periodS}s，起点 ${startCnt}`);
+
+  prof.timer = setInterval(profTick, 50);   // 20Hz 下发
+});
+
+function profTick() {
+  if (!prof.active) return;
+
+  // 平衡态丢失 → 自动停止
+  if (latest.state !== 2) {
+    log('② 非平衡态，运动曲线自动停止', 'e');
+    stopProfile(true);
+    return;
+  }
+
+  if (!port || !writer) { stopProfile(true); return; }
+
+  const el = performance.now() - prof.t0;
+  const phase = (el % prof.periodMs) / prof.periodMs;
+
+  // 线性波形只走一趟：到达终点后自动结束
+  if (prof.type === 'lin' && el >= prof.periodMs) {
+    const end = Math.round(prof.startCnt + prof.ampCnt * SIGN_ARM);
+    sendParam(ADDR_POS_TARGET, end);
+    $('posTgt').value = end;
+    log(`② 线性运动完成，停在 ${end} 计数`);
+    stopProfile(false);
+    return;
+  }
+
+  const off = profOffset(prof.type, phase, prof.ampCnt);
+  // 显示正向 = 计数反向，所以偏移乘 SIGN_ARM
+  const tgt = Math.round(prof.startCnt + off * SIGN_ARM);
+
+  if (tgt !== prof.lastSent) {
+    sendParam(ADDR_POS_TARGET, tgt);
+    prof.lastSent = tgt;
+    $('posTgt').value = tgt;
+    $('posDeg').value = (tgt * 360 / ENC_PER_REV).toFixed(1);
+  }
+}
+
+function stopProfile(silent) {
+  const wasActive = prof.active;
+  prof.active = false;
+  if (prof.timer) { clearInterval(prof.timer); prof.timer = 0; }
+  $('btnProfRun').disabled = false;
+  $('btnProfRun').textContent = '开始运动';
+  if (wasActive && !silent) log('② 运动曲线已停止');
+}
+
+$('btnProfStop').addEventListener('click', () => stopProfile(false));
+
+// ---------------------------------------------------------------- 显示方向开关
+//   复选框「勾选」= 该通道反向（sign = -1）
+$('chkInvArm').checked  = (signState.arm  === -1);
+$('chkInvPend').checked = (signState.pend === -1);
+
+$('chkInvArm').addEventListener('change', e => {
+  signState.arm = e.target.checked ? -1 : 1;
+  applySignState();
+  log(`摆臂显示方向：${e.target.checked ? '反向' : '正向'}`);
+});
+
+$('chkInvPend').addEventListener('change', e => {
+  signState.pend = e.target.checked ? -1 : 1;
+  applySignState();
+  log(`摆杆显示方向：${e.target.checked ? '反向' : '正向'}`);
+});
+
+// ---------------------------------------------------------------- 甩杆参数
+const ADDR_FLING = {
+  step:   0x11,
+  kp:     0x12,
+  kd:     0x13,
+  back:   0x14,
+  decel:  0x15,
+  win:    0x16,
+  pticks: 0x17,
+};
+const FLING_DEFAULT = { step:341, kp:90, kd:180, back:80, decel:30, win:15, pticks:60 };
+
+$('btnFlingCfg').addEventListener('click', () => {
+  const p = $('flingPanel');
+  const show = p.style.display === 'none';
+  p.style.display = show ? 'block' : 'none';
+  $('btnFlingCfg').classList.toggle('active', show);
+  if (show) updateFlingHint();
+});
+
+function updateFlingHint() {
+  const s = +$('flStep').value || 0;
+  $('flStepHint').textContent = `= ${(s * 360 / ENC_PER_REV).toFixed(1)}°`;
+}
+$('flStep').addEventListener('input', updateFlingHint);
+
+function sendFling(name) {
+  if (!port || !writer) { log('未连接串口', 'e'); return false; }
+  const map = {
+    step:   ['flStep',  ADDR_FLING.step],
+    kp:     ['flKp',    ADDR_FLING.kp],
+    kd:     ['flKd',    ADDR_FLING.kd],
+    back:   ['flBack',  ADDR_FLING.back],
+    decel:  ['flDecel', ADDR_FLING.decel],
+    win:    ['flWin',   ADDR_FLING.win],
+    pticks: ['flTicks', ADDR_FLING.pticks],
+  };
+  const [id, addr] = map[name];
+  const v = Math.round(+$(id).value);
+  if (!isFinite(v)) { log(`甩杆参数 ${name} 无效`, 'e'); return false; }
+  sendParam(addr, v);
+  return true;
+}
+
+$('btnFlingSend').addEventListener('click', () => {
+  if (!port) { log('未连接串口（需先连接才能下发）', 'e'); return; }
+  const names = ['step','kp','kd','back','decel','win','pticks'];
+  let ok = 0;
+  for (const n of names) if (sendFling(n)) ok++;
+  if (ok === names.length) {
+    log(`甩杆参数已下发 STEP=${$('flStep').value} KP=${$('flKp').value} KD=${$('flKd').value} ` +
+        `BACK=${$('flBack').value} DECEL=${$('flDecel').value} ` +
+        `WIN=${$('flWin').value} TICKS=${$('flTicks').value}`);
+  }
+});
+
+$('btnFlingReset').addEventListener('click', () => {
+  $('flStep').value  = FLING_DEFAULT.step;
+  $('flKp').value    = FLING_DEFAULT.kp;
+  $('flKd').value    = FLING_DEFAULT.kd;
+  $('flBack').value  = FLING_DEFAULT.back;
+  $('flDecel').value = FLING_DEFAULT.decel;
+  $('flWin').value   = FLING_DEFAULT.win;
+  $('flTicks').value = FLING_DEFAULT.pticks;
+  updateFlingHint();
+  log('甩杆参数已恢复为面板默认值（未下发，点「下发甩杆参数」生效）');
+});
+
+// ---------------------------------------------------------------- 目标位置
+
+// 目标换算：度 -> 编码器计数
+const degToCnt = d => Math.round(d * ENC_PER_REV / 360);
+const cntToDeg = c => c * 360 / ENC_PER_REV;
+
+// 当前实际位置（相对机械零点）
+function curPosCnt() {
+  const ez = +$('encZero').value || 0;
+  return latest.enc1 - ez;
+}
+
+function applyPosTarget(cnt) {
+  if (!port) { log('未连接', 'e'); return; }
+  if (latest.state !== 2) {
+    log('非平衡态，位置环目标未下发（需先进入 BALANCE）', 'e');
+    return;
+  }
+  if (wheelActive()) {
+    log('手轮模式运行中：位置目标由手轮决定，网页下发会被固件每 5ms 覆盖', 'e');
+    return;
+  }
+  const c = Math.round(cnt);
+  sendParam(ADDR_POS_TARGET, c);
+  log(`位置环目标 → ${c} 计数 (${cntToDeg(c).toFixed(1)}°)`);
+}
+
+function setFromInput() {
+  const v = +$('posTgt').value;
+  if (!isFinite(v)) { log('目标值无效', 'e'); return; }
+  applyPosTarget(v);
+}
+
+function setFromDeg() {
+  const d = +$('posDeg').value;
+  if (!isFinite(d)) { log('角度值无效', 'e'); return; }
+  applyPosTarget(degToCnt(d) / SIGN_ARM);
+}
+
+// ---------------------------------------------------------------- 交互绑定
+$('btnConn').addEventListener('click', () => { if (port) disconnect(); else connect(); });
+
+$('btnPause').addEventListener('click', () => {
+  paused = !paused;
+  $('btnPause').textContent = paused ? '继续' : '暂停';
+});
+
+$('btnClear').addEventListener('click', () => {
+  ch.ang.data.length = 0; ch.pos.data.length = 0; ch.pwm.data.length = 0;
+  ch.mic.data.length = 0;
+  ch.micLvl.data.length = 0;
+  frameCount = 0; errCount = 0; chkFail = 0; rateEma = 0;
+});
+$('btnCsv').addEventListener('click', () => {
+  const n = Math.max(ch.ang.data.length, ch.pos.data.length, ch.pwm.data.length, ch.micLvl.data.length);
+  if (!n) { log('没有数据', 'e'); return; }
+  const lines = ['index,ang_cnt,pos_cnt,pwm,mic_lvl'];
+  for (let k = 0; k < n; k++)
+    lines.push([k, ch.ang.data[k] ?? '', ch.pos.data[k] ?? '', ch.pwm.data[k] ?? '',
+                ch.micLvl.data[k] ?? ''].join(','));
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `posloop_${new Date().toISOString().replace(/[:.]/g,'-')}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  log(`已导出 ${n} 行`);
+});
+
+// 目标位置
+$('btnSetPos').addEventListener('click', setFromInput);
+$('posTgt').addEventListener('keydown', e => { if (e.key === 'Enter') setFromInput(); });
+
+// 角度输入
+$('btnSetDeg').addEventListener('click', setFromDeg);
+$('posDeg').addEventListener('keydown', e => { if (e.key === 'Enter') setFromDeg(); });
+
+// 增量按钮（基于当前目标累加）
+function bump(deltaCnt) {
+  const cur = latest.posTgt;
+  applyPosTarget(cur + deltaCnt);
+  $('posTgt').value = cur + deltaCnt;
+}
+
+$('btnPlus10').addEventListener('click',  () => bump(degToCnt(10)));
+$('btnMinus10').addEventListener('click', () => bump(degToCnt(-10)));
+$('btnPlus90').addEventListener('click',  () => bump(degToCnt(90)));
+$('btnMinus90').addEventListener('click', () => bump(degToCnt(-90)));
+$('btnPlus360').addEventListener('click', () => bump(ENC_PER_REV / SIGN_ARM));
+$('btnMinus360').addEventListener('click',() => bump(-ENC_PER_REV / SIGN_ARM));
+$('btnZero').addEventListener('click', () => {
+  $('posTgt').value = 0;
+  applyPosTarget(0);
+});
+
+// 跟随当前实际位置
+$('btnNow').addEventListener('click', () => {
+  const c = curPosCnt();
+  $('posTgt').value = c;
+  $('posDeg').value = cntToDeg(c).toFixed(1);
+  applyPosTarget(c);
+});
+$('btnGotoNow').addEventListener('click', () => {
+  const c = curPosCnt();
+  $('posTgt').value = c;
+  $('posDeg').value = cntToDeg(c).toFixed(1);
+  log(`已同步为当前 ${c} 计数（未下发）`);
+});
+
+// 平衡点
+$('btnSetBal').addEventListener('click', () => {
+  const v = +$('balTgt').value;
+  if (!isFinite(v)) { log('平衡点无效', 'e'); return; }
+  if (sendParam(ADDR_BAL_TARGET, v)) {
+    $('angleZero').value = v;
+    log(`角度环平衡点 → ${v}`);
+  }
+});
+$('balTgt').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnSetBal').click(); });
+
+// 把【当前读到的角度】直接设为平衡点（换标度后默认值失效，用这个一次搞定）
+//   前提：摆杆已扶到竖直并静止。用的是固件实际采信的滤波值 latest.angle。
+$('btnBalNow').addEventListener('click', () => {
+  if (!hasData) { log('还没收到数据，稍等一下', 'e'); return; }
+  const v = latest.angle;
+  if (!sendParam(ADDR_BAL_TARGET, v)) return;
+  $('balTgt').value = v;
+  $('angleZero').value = v;
+  log(`平衡点已设为当前角度 ${v} 计数（摆杆需竖直静止）`, 'k');
+});
+
+// 编码器零点变化时提示
+$('encZero').addEventListener('change', () => {
+  log('编码器零点已改，位置读数基准随之变化');
+});
+
+// ---------------------------------------------------------------- 主循环
+let lastReadout = 0;
+function loop(ts) {
+  drawAnim();
+  drawWave();
+  drawMic();
+  // 读数 20Hz 更新即可，避免频繁写 DOM
+  if (ts - lastReadout > 50) {
+    updateReadouts();
+    lastReadout = ts;
+  }
+  requestAnimationFrame(loop);
+}
+
+// ---------------------------------------------------------------- 启动
+log('上报：AA 55 | angle | enc1 | enc2 | pwm | state | rawAngle | posTgt | posPwm | micLvl | abV | audio(39×2B) | chk | 0D 0A（102B, 115200）');
+log('下发：AA 55 01 | addr | dataH | dataL | chk | 0D 0A（9B）');
+if (!('serial' in navigator)) log('提示：此浏览器无 Web Serial，请用 Chrome/Edge。', 'e');
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
