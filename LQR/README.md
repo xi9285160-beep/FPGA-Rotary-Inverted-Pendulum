@@ -140,15 +140,15 @@ K = |k| × (rad per count) × (PWM per volt)
 ```mermaid
 stateDiagram-v2
     [*] --> S_IDLE
-    S_IDLE --> S_BALANCE: SW1 且 |α| < MANUAL_WINDOW
-    S_IDLE --> S_SWING: SW1 且在下方且静止
-    S_IDLE --> S_WAIT: SW1 但位置不对
-    S_WAIT --> S_SWING: 连续 10 拍满足下垂条件
-    S_WAIT --> S_BALANCE: 连续 4 拍仍在竖直附近（误触发自恢复）
-    S_SWING --> S_BALANCE: 连续 10 拍进入捕获窗口
-    S_SWING --> S_WAIT: 超时 20 s / 摆臂超速
-    S_BALANCE --> S_WAIT: 连续 4 拍保护触发
-    S_BALANCE --> S_IDLE: SW1 停机
+    S_IDLE --> S_BALANCE : SW1 且角度在窗口内
+    S_IDLE --> S_SWING : SW1 且在下方静止
+    S_IDLE --> S_WAIT : SW1 但位置不对
+    S_WAIT --> S_SWING : 连续 10 拍满足下垂条件
+    S_WAIT --> S_BALANCE : 连续 4 拍仍在竖直附近
+    S_SWING --> S_BALANCE : 连续 10 拍进入捕获窗口
+    S_SWING --> S_WAIT : 超时 20s 或摆臂超速
+    S_BALANCE --> S_WAIT : 连续 4 拍保护触发
+    S_BALANCE --> S_IDLE : SW1 停机
 ```
 
 | 状态 | 编码 | LED 表现 |

@@ -20,17 +20,17 @@
 
 ```mermaid
 flowchart LR
-    A["3PA1030 ADC<br/>10-bit 并行"] --> B["adc.v<br/>过采样 + 中值/毛刺门"]
-    C["增量编码器<br/>A/B 正交"] --> D["encoder.v<br/>四倍频"]
-    B --> E["控制核心<br/>PIDSYB: pendulum_ctrl<br/>LQR: lqr_ctrl"]
-    D --> E
-    F["按键 / 拨码"] --> E
-    E --> G["motor_drive.v<br/>TB6612 有符号 PWM"]
-    G --> H["摆臂电机"]
-    E --> I["uart_status.v<br/>周期遥测"]
-    I --> J["上位机 HTML 页"]
-    J --> K["uart_rx / uart_cmd<br/>参数下发"]
-    K --> E
+    ADC["3PA1030 ADC 10-bit"] --> ADCV["adc.v 过采样"]
+    ENC["增量编码器 A/B"] --> ENCV["encoder.v 四倍频"]
+    ADCV --> CTRL["控制核心"]
+    ENCV --> CTRL
+    KEY["按键 拨码"] --> CTRL
+    CTRL --> MDRV["motor_drive.v TB6612"]
+    MDRV --> MOTOR["摆臂电机"]
+    CTRL --> USTAT["uart_status.v 遥测"]
+    USTAT --> PC["上位机 HTML 页"]
+    PC --> UCMD["uart_cmd 参数下发"]
+    UCMD --> CTRL
 ```
 
 ---
